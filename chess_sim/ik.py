@@ -73,7 +73,9 @@ class So101Ik:
         the direction the moving jaw opens toward) should align with; the wrist
         roll provides that freedom without disturbing the approach direction.
         A span opposite to the current roll is a saddle for the local solver,
-        so the roll is multi-started (current, current + pi).
+        so the roll is multi-started (current, current + pi). A span beyond the
+        roll's range is realized as far as the limit allows; the position and
+        tilt objectives are never traded for it.
         """
         offset = np.zeros(3) if offset is None else np.asarray(offset, dtype=float)
         target = np.asarray(target, dtype=float)
@@ -142,7 +144,11 @@ class So101Ik:
                 J = np.vstack([J, J_tilt[:2]])
             if span is not None:
                 d_z = np.cross(jacr[:, self.dof_adr].T, mat[:, 2]).T   # d(tool z)/dq
-                J = np.vstack([J, 0.6 * d_z[:2]])
+                J_span = 0.6 * d_z[:2]
+                # the span is the roll's job alone: when the roll saturates at
+                # its limit the other joints must not bend the arm to serve it
+                J_span[:, :4] = 0.0
+                J = np.vstack([J, J_span])
             JT = J.T
             inv = np.linalg.inv(J @ JT + damping * np.eye(J.shape[0]))
             dq = JT @ (inv @ residual)

@@ -53,7 +53,6 @@ def piece_texture_path(piece: chess.Piece) -> str:
 # Collider profile: (bottom, top) height fractions of each cylinder segment and
 # the height fraction at which its radius is sampled from the mesh.
 PROFILE_SEGMENTS = ((0.00, 0.25, 0.10), (0.25, 0.45, 0.35), (0.45, 0.65, 0.55), (0.65, 1.00, 0.80))
-WAIST_FRACTION = 0.55
 
 
 @dataclass(frozen=True)
@@ -66,7 +65,6 @@ class PieceGeometry:
     bottom_offset: float  # mesh-frame z of the base (scaled), usually negative
     center: np.ndarray    # scaled mesh AABB center (mesh frame)
     profile: tuple        # ((z_bottom, z_top, radius), ...) in scaled mesh frame
-    waist_radius: float   # mesh radius at the grasp height
 
     @property
     def waist(self) -> float:
@@ -90,12 +88,11 @@ class PieceGeometry:
         """Footprint radius (the base segment of the collider profile)."""
         return self.profile[0][2]
 
-    @property
-    def crown_radius(self) -> float:
-        """Widest radius at or above the grasp height (what open prongs must
-        clear while descending onto the piece and retreating from it)."""
-        grasp_z = self.bottom_offset + self.waist
-        return max(r for z0, z1, r in self.profile if z1 > grasp_z)
+    def radius_between(self, lo: float, hi: float) -> float:
+        """Widest collider radius between heights `lo` and `hi` above the base
+        (what open prongs spanning that band must clear on the way in and out)."""
+        z_lo, z_hi = self.bottom_offset + lo, self.bottom_offset + hi
+        return max(r for z0, z1, r in self.profile if z1 > z_lo and z0 < z_hi)
 
 
 @lru_cache(maxsize=None)
@@ -141,7 +138,6 @@ def piece_geometry(piece: chess.Piece, square: float) -> PieceGeometry:
         bottom_offset=float(lo[2] * scale),
         center=(lo + hi) * 0.5 * scale,
         profile=profile,
-        waist_radius=_radius_at(path, WAIST_FRACTION) * scale,
     )
 
 

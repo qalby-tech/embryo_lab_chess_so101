@@ -18,7 +18,7 @@ chess_sim/                 the framework package
   reach.py                 which squares/moves the expert can execute
   env.py                   ChessSimEnv — the public API
   recorder.py              EpisodeRecorder — LeRobot-style episode files
-examples/                  play_random_moves.py, collect_dataset.py, calibrate_reach.py
+examples/                  play_random_moves.py, play_opening.py, collect_dataset.py, calibrate_reach.py
 ```
 
 ## Quick start
@@ -58,14 +58,14 @@ episodes with `"success": true`.
 
 ## What the scripted expert does
 
-`env.move()` picks the piece with a tool-axis approach, closes the jaws to the
-piece's measured width, carries it world-upright above the other pieces, and
-sets it down on the target square, then verifies: piece within 11 mm of the
-square center, upright, and no other piece displaced by more than 10 mm.
-Grasping is kinematic — the piece is snapped into the measured finger pocket at
-pinch time — which makes episodes deterministic and visually correct without
-contact tuning. `env.executable_moves()` lists the quiet legal moves the arm
-can perform in the current position with clearance for the jaws.
+`env.move()` picks the piece with a tool-axis approach, closes the jaws onto
+it, carries it world-upright above the other pieces, and sets it down on the
+target square, then verifies: piece within 11 mm of the square center, upright,
+and no other piece displaced by more than 10 mm. Everything is simulated
+physics: the piece is held only by friction between the fingertip pads, and
+the arm's position servos track IK joint targets under gravity and contact.
+`env.executable_moves()` lists the quiet legal moves the arm can perform in
+the current position with clearance for the jaws.
 
 ## Design notes
 
@@ -82,27 +82,40 @@ can perform in the current position with clearance for the jaws.
 - **Where a piece is held.** Straight prongs cannot pinch a narrow neck below a
   wider crown, so each piece is grasped at its widest segment above the base
   (a king by its crown, a pawn by its head) and the jaws close to that radius;
-  open prongs are positioned to clear that same radius on the way in and out.
-- **The grasp is physical by default.** `ChessSimEnv(grasp="physical")` holds
-  pieces purely by friction between fingertip contact pads: the jaws close
-  2.5 mm past the piece surface and the piece rides on the resulting clamp
-  (~1–2 N) through lift, transit and placement, with the live piece-to-pocket
-  offset measured before setting down. What made it work (see `gripper.py`):
+  open prongs are positioned to clear the widest radius anywhere in the band
+  the 2 cm pads span (a rook's base flange as much as a king's crown), on the
+  way in and out.
+- **The grasp is physical.** Pieces are held purely by friction between
+  fingertip contact pads: the jaws close 2.5 mm past the piece surface and the
+  piece rides on the resulting clamp (~1–2 N) through lift, transit and
+  placement, with the live piece-to-pocket offset measured before setting
+  down. What made it work (see `gripper.py`):
   the stock finger meshes collide as convex hulls that fill the pinch pocket, so
   thin pads replace them at the fingertips; MuJoCo's default soft contact is
   mass-normalized and clamps a 4 g piece with ~0.1 N, so the pads carry an
   explicit stiffness (`solref` in N/m), full 6-D friction and contact priority;
   the moving pad is mounted parallel to the fixed one at the nominal grasp
-  angle. `grasp="kinematic"` attaches the piece to the gripper at pinch time
-  instead — deterministic, useful when contact behavior is not the point.
+  angle; and the scene uses elliptic friction cones with `impratio` 10,
+  because with MuJoCo's default pyramidal cones a held piece creeps through
+  the pads by about a centimeter over a two-second carry.
+- **IK is only a target generator.** `So101Ik` (damped least squares) turns
+  "pinch pocket at this square" into joint targets; the position actuators
+  then track them under full dynamics, with a small integral bias per waypoint
+  to cancel the servos' pose-dependent steady-state error.
 - **Jaw-span selection.** The wrist roll is chosen per move so the moving jaw
   opens toward the freest neighboring square (`ChessSimEnv.free_span_direction`,
   `So101Ik.solve(span=...)`), and the piece rides next to the fixed prong while
-  the jaws are open so all the opening slack lands on the free side.
+  the jaws are open so all the opening slack lands on the free side. Only
+  spans the roll joint can actually turn to at that square are candidates
+  (`ReachMap.feasible_spans`); in the solver the span objective drives the
+  roll alone, so a span past the roll limit is realized as far as possible
+  instead of bending the arm to serve it.
 - **Crowding limit.** On a fully populated opening position the ~5 mm prongs
   have only ~2 mm of corridor between 28 mm squares, and the roll joint cannot
   reach a full 180°; expect occasional neighbor contact there. Sparse and
-  moderately crowded positions execute reliably (validation: ≥14/15 moves at
-  0.5–2.4 mm placement). A larger square pitch trades reach for clearance.
+  moderately crowded positions execute reliably: 50/50 random moves over five
+  seeds of `examples/play_random_moves.py` (0.2–8.3 mm placement; rooks land
+  least precisely because their base flange forces a short drop at release)
+  and a 5-move ladder mate 5/5. A larger square pitch trades reach for clearance.
 - Captures, castling, promotion and en passant are not executed by the expert
   yet; the graveyard slots make captures a small follow-up.

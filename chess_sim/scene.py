@@ -71,6 +71,11 @@ def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
     spec.meshdir = assets.ASSET_DIR
     spec.texturedir = assets.ASSET_DIR
     spec.option.timestep = 0.002
+    # Elliptic friction cones with a high impedance ratio: with the default
+    # pyramidal cones a friction-held piece creeps through the pads by ~1 cm
+    # over a two-second carry and slides off its widest segment.
+    spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
+    spec.option.impratio = 10.0
     spec.visual.global_.offwidth = 1280
     spec.visual.global_.offheight = 720
     spec.visual.quality.shadowsize = 4096

@@ -1,11 +1,11 @@
 """Episode recording in a LeRobot-compatible layout.
 
     rec = EpisodeRecorder(env, "datasets/chess")
-    rec.begin(instruction="move the white knight from g1 to f3", fen=env.board.fen())
+    rec.begin("move the white knight from g1 to f3", fen=env.board.fen(), move="g1f3")
     result = env.move("g1", "f3", on_step=rec.on_step)
-    rec.end(success=result.success, extra={"move": "g1f3"})
+    rec.end(result.success, placement_error=result.placement_error)
 
-Each episode directory holds data.npz (observation.state, action at the control
+Each episode directory holds data.npz (observation_state, action at the control
 rate), one mp4 per camera, and meta.json; a manifest.jsonl indexes them.
 """
 from __future__ import annotations

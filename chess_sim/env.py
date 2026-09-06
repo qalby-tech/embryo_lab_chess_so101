@@ -18,7 +18,7 @@ import numpy as np
 from .board import START_FEN, BoardSpec, parse_square
 from .controller import PickPlaceController
 from .ik import So101Ik
-from .reach import ReachMap
+from .reach import SPAN_DIRECTIONS, ReachMap
 from .scene import ARM_PREFIX, CAMERA_NAMES, PieceSlot, arm_rest_pose, build_scene, export_xml, piece_slots
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
@@ -55,9 +55,7 @@ class ChessSimEnv:
     def __init__(self, board_spec: BoardSpec = BoardSpec(),
                  cameras: tuple[str, ...] = CAMERA_NAMES,
                  image_size: tuple[int, int] = (640, 480),
-                 control_hz: int = 30, grasp: str = "physical"):
-        """`grasp`: "physical" (friction between fingertip pads) or "kinematic"
-        (piece attached to the gripper at pinch time)."""
+                 control_hz: int = 30):
         self.board_spec = board_spec
         self.spec = build_scene(board_spec)
         self.model = self.spec.compile()
@@ -86,12 +84,12 @@ class ChessSimEnv:
         self.cameras = tuple(cameras)
         self._image_size = image_size
         self._renderer: mujoco.Renderer | None = None
-        self.controller = PickPlaceController(self, mode=grasp)
+        self.controller = PickPlaceController(self)
         self._step_count = 0
         self.reach = ReachMap.compute(board_spec, self._tool_query, grasp_height=0.016)
 
-    def _tool_query(self, target: np.ndarray):
-        res = self.ik.solve(self.data, target)
+    def _tool_query(self, target: np.ndarray, span: np.ndarray | None = None):
+        res = self.ik.solve(self.data, target, span=span)
         _, mat = self.ik.forward(res.q, self.data, np.zeros(3))
         return res, mat
 
@@ -101,7 +99,6 @@ class ChessSimEnv:
         """Lay out a position (FEN board field or full FEN) and park the arm."""
         position = chess.Board(fen if " " in fen else f"{fen} w - - 0 1")
         self.board = position
-        self.controller.grasp = None
         self._square_slot = {}
         pool = {s.body: s for s in self.slots}
         for square, piece in position.piece_map().items():
@@ -144,7 +141,6 @@ class ChessSimEnv:
             self.data.ctrl[aid] = target
         for _ in range(self.substeps):
             mujoco.mj_step(self.model, self.data)
-            self.controller.update_grasp()
         self._step_count += 1
 
     def step(self, action: np.ndarray) -> Observation:
@@ -219,8 +215,12 @@ class ChessSimEnv:
         The moving jaw opens toward +direction and needs ~MOVING_JAW_ROOM of
         free space past the piece; the fixed prong sits on -direction and needs
         ~FIXED_PRONG_ROOM. The margin is the smaller of the two surpluses.
+        Only directions the wrist roll can realize at that square are considered.
         """
         xy = np.asarray(xy, dtype=float)
+        square = self.board_spec.square_at(*xy)
+        directions = self.reach.feasible_spans(square) if square in self.reach else ()
+        directions = directions or SPAN_DIRECTIONS
         others = [(self.piece_position(sl)[:2] - xy, sl.geometry.collider_radius)
                   for sl in self._square_slot.values() if sl is not exclude]
         lane = 0.75 * self.board_spec.square
@@ -235,8 +235,7 @@ class ChessSimEnv:
             return best
 
         best_dir, best_margin = None, -1.0
-        for d in (np.array([0.0, 1.0]), np.array([0.0, -1.0]),
-                  np.array([1.0, 0.0]), np.array([-1.0, 0.0])):
+        for d in directions:
             margin = min(room(d) - MOVING_JAW_ROOM, room(-d) - FIXED_PRONG_ROOM)
             if margin > best_margin:
                 best_dir, best_margin = d, margin
@@ -268,10 +267,6 @@ class ChessSimEnv:
 
     def piece_upright(self, slot: PieceSlot) -> float:
         return float(self.data.xmat[self._slot_body[slot.body]].reshape(3, 3)[2, 2])
-
-    def piece_yaw(self, slot: PieceSlot) -> float:
-        m = self.data.xmat[self._slot_body[slot.body]].reshape(3, 3)
-        return float(np.arctan2(m[1, 0], m[0, 0]))
 
     def set_piece_pose(self, slot: PieceSlot, position, quat, zero_velocity=False) -> None:
         adr = self._slot_qpos[slot.body]

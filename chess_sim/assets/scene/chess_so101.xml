@@ -1,6 +1,8 @@
 <mujoco model="chess_so101">
   <compiler angle="radian" meshdir="/home/kamil/chess_so101/chess_sim/assets/" texturedir="/home/kamil/chess_so101/chess_sim/assets/"/>
 
+  <option impratio="10" cone="elliptic"/>
+
   <visual>
     <global offwidth="1280" offheight="720"/>
   </visual>

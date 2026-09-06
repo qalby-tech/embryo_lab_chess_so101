@@ -18,6 +18,7 @@ JOINT_MIN, JOINT_MAX = -0.17, 1.74
 POCKET_X = -0.004    # pocket center along the approach axis: the fingertip pads' center
 TIP_X = 0.008        # furthest fingertip point along the approach axis
 TIP_CLEARANCE = 0.003  # keep fingertips at least this far above the board
+PAD_REACH = 0.010    # the pads extend this far from the pocket center along the approach axis
 
 
 # Fingertip contact pads (body frame of each jaw, measured at joint angle 0):
