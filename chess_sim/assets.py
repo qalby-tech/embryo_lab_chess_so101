@@ -84,6 +84,15 @@ class PieceGeometry:
         return max(self.profile[1:], key=lambda seg: seg[2])
 
     @property
+    def flange_top(self) -> float:
+        """Height above the base of the top of the highest segment below the
+        grasp segment that is wider than it (0 if none): pads clamping the
+        grasp segment must not reach down into it."""
+        z0, _, radius = self._grasp_segment
+        tops = [z1 - self.bottom_offset for zb, z1, r in self.profile if z1 <= z0 and r > radius]
+        return max(tops, default=0.0)
+
+    @property
     def collider_radius(self) -> float:
         """Footprint radius (the base segment of the collider profile)."""
         return self.profile[0][2]

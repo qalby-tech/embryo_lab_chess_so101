@@ -6,7 +6,6 @@ center is the world origin in x/y; the arm sits on the -y side (white's side).
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import chess
@@ -48,11 +47,6 @@ class BoardSpec:
         """World x/y of a python-chess square index (0 = a1 ... 63 = h8)."""
         f, r = chess.square_file(square), chess.square_rank(square)
         return (f - 3.5) * self.square, (r - 3.5) * self.square
-
-    def square_at(self, x: float, y: float) -> int | None:
-        """Square index under world x/y, or None off the playing field."""
-        f, r = math.floor(x / self.square + 4), math.floor(y / self.square + 4)
-        return chess.square(f, r) if 0 <= f < 8 and 0 <= r < 8 else None
 
     def graveyard_slot(self, index: int) -> tuple[float, float]:
         """Off-board parking spot for pieces absent from the position."""

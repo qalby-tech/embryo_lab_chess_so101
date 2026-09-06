@@ -73,9 +73,11 @@ class So101Ik:
         the direction the moving jaw opens toward) should align with; the wrist
         roll provides that freedom without disturbing the approach direction.
         A span opposite to the current roll is a saddle for the local solver,
-        so the roll is multi-started (current, current + pi). A span beyond the
-        roll's range is realized as far as the limit allows; the position and
-        tilt objectives are never traded for it.
+        so the roll is multi-started (current, current + pi). The span objective
+        acts on the roll alone: a span beyond the roll's range is realized as
+        far as the limit allows (the 320-degree range puts every direction
+        within ~20 degrees of a reachable roll), and the other joints are never
+        bent to serve it.
         """
         offset = np.zeros(3) if offset is None else np.asarray(offset, dtype=float)
         target = np.asarray(target, dtype=float)
@@ -100,11 +102,11 @@ class So101Ik:
         return IkResult(q=q, position_error=float(np.linalg.norm(target - pos)), tilt=tilt)
 
     def _wrap_roll(self, roll: float) -> float:
+        """Equivalent angle nearest the roll range's center, clipped into range:
+        an angle in the unreachable arc lands on the nearer limit."""
         lo, hi = self.lower[4], self.upper[4]
-        while roll > hi:
-            roll -= 2 * np.pi
-        while roll < lo:
-            roll += 2 * np.pi
+        mid = 0.5 * (lo + hi)
+        roll = mid + (roll - mid + np.pi) % (2 * np.pi) - np.pi
         return float(np.clip(roll, lo, hi))
 
     def _iterate(self, data, q, target, offset, keep_vertical, span,

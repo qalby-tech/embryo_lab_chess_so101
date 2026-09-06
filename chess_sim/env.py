@@ -18,7 +18,7 @@ import numpy as np
 from .board import START_FEN, BoardSpec, parse_square
 from .controller import PickPlaceController
 from .ik import So101Ik
-from .reach import SPAN_DIRECTIONS, ReachMap
+from .reach import ReachMap
 from .scene import ARM_PREFIX, CAMERA_NAMES, PieceSlot, arm_rest_pose, build_scene, export_xml, piece_slots
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
@@ -28,6 +28,9 @@ UPRIGHT_MIN = 0.85            # z-axis alignment of a standing piece
 # free space the open jaw needs beyond the grasped piece's surface
 MOVING_JAW_ROOM = 0.020       # moving prong swings out this far past the piece
 FIXED_PRONG_ROOM = 0.009      # fixed prong: ~3 mm slack + prong thickness
+# candidate jaw-span directions: the moving jaw opens along one board axis
+SPAN_DIRECTIONS = (np.array([0.0, 1.0]), np.array([0.0, -1.0]),
+                   np.array([1.0, 0.0]), np.array([-1.0, 0.0]))
 
 
 @dataclass
@@ -88,8 +91,8 @@ class ChessSimEnv:
         self._step_count = 0
         self.reach = ReachMap.compute(board_spec, self._tool_query, grasp_height=0.016)
 
-    def _tool_query(self, target: np.ndarray, span: np.ndarray | None = None):
-        res = self.ik.solve(self.data, target, span=span)
+    def _tool_query(self, target: np.ndarray):
+        res = self.ik.solve(self.data, target)
         _, mat = self.ik.forward(res.q, self.data, np.zeros(3))
         return res, mat
 
@@ -215,12 +218,8 @@ class ChessSimEnv:
         The moving jaw opens toward +direction and needs ~MOVING_JAW_ROOM of
         free space past the piece; the fixed prong sits on -direction and needs
         ~FIXED_PRONG_ROOM. The margin is the smaller of the two surpluses.
-        Only directions the wrist roll can realize at that square are considered.
         """
         xy = np.asarray(xy, dtype=float)
-        square = self.board_spec.square_at(*xy)
-        directions = self.reach.feasible_spans(square) if square in self.reach else ()
-        directions = directions or SPAN_DIRECTIONS
         others = [(self.piece_position(sl)[:2] - xy, sl.geometry.collider_radius)
                   for sl in self._square_slot.values() if sl is not exclude]
         lane = 0.75 * self.board_spec.square
@@ -235,7 +234,7 @@ class ChessSimEnv:
             return best
 
         best_dir, best_margin = None, -1.0
-        for d in directions:
+        for d in SPAN_DIRECTIONS:
             margin = min(room(d) - MOVING_JAW_ROOM, room(-d) - FIXED_PRONG_ROOM)
             if margin > best_margin:
                 best_dir, best_margin = d, margin

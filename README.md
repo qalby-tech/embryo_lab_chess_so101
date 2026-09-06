@@ -81,10 +81,11 @@ the current position with clearance for the jaws.
   rest on a rounded nub and creep across the board.
 - **Where a piece is held.** Straight prongs cannot pinch a narrow neck below a
   wider crown, so each piece is grasped at its widest segment above the base
-  (a king by its crown, a pawn by its head) and the jaws close to that radius;
-  open prongs are positioned to clear the widest radius anywhere in the band
-  the 2 cm pads span (a rook's base flange as much as a king's crown), on the
-  way in and out.
+  (a king by its crown, a pawn by its head) and the jaws close to that radius.
+  The 2 cm pads must not reach down into a wider segment below the one they
+  clamp, so a rook is held high enough that the pads stay above its base
+  flange (it drops 7 mm at release), and open prongs are positioned to clear
+  the widest radius anywhere in the band the pads span, on the way in and out.
 - **The grasp is physical.** Pieces are held purely by friction between
   fingertip contact pads: the jaws close 2.5 mm past the piece surface and the
   piece rides on the resulting clamp (~1–2 N) through lift, transit and
@@ -105,17 +106,15 @@ the current position with clearance for the jaws.
 - **Jaw-span selection.** The wrist roll is chosen per move so the moving jaw
   opens toward the freest neighboring square (`ChessSimEnv.free_span_direction`,
   `So101Ik.solve(span=...)`), and the piece rides next to the fixed prong while
-  the jaws are open so all the opening slack lands on the free side. Only
-  spans the roll joint can actually turn to at that square are candidates
-  (`ReachMap.feasible_spans`); in the solver the span objective drives the
-  roll alone, so a span past the roll limit is realized as far as possible
-  instead of bending the arm to serve it.
+  the jaws are open so all the opening slack lands on the free side. In the
+  solver the span objective drives the roll alone: the roll's 320° range puts
+  every direction within ~20° of a reachable angle, and a span past the limit
+  is realized as far as possible instead of bending the arm to serve it.
 - **Crowding limit.** On a fully populated opening position the ~5 mm prongs
   have only ~2 mm of corridor between 28 mm squares, and the roll joint cannot
   reach a full 180°; expect occasional neighbor contact there. Sparse and
   moderately crowded positions execute reliably: 50/50 random moves over five
-  seeds of `examples/play_random_moves.py` (0.2–8.3 mm placement; rooks land
-  least precisely because their base flange forces a short drop at release)
-  and a 5-move ladder mate 5/5. A larger square pitch trades reach for clearance.
+  seeds of `examples/play_random_moves.py` at 0.2–4.2 mm placement, and a
+  5-move ladder mate 5/5. A larger square pitch trades reach for clearance.
 - Captures, castling, promotion and en passant are not executed by the expert
   yet; the graveyard slots make captures a small follow-up.

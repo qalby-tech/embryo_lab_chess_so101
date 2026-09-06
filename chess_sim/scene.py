@@ -148,8 +148,9 @@ def _add_pieces(spec, board):
         body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"mesh_{kind}",
                       material=f"mat_{kind}", contype=0, conaffinity=0, density=0)
         # Profiled collider: a short stack of cylinders following the mesh
-        # (flat base for stable settling, narrow waist so the jaws can close on
-        # it). Generated hulls rest on a rounded nub and creep across the board.
+        # (flat base for stable settling, true radii above it so the jaws close
+        # on the widest segment). Generated hulls rest on a rounded nub and
+        # creep across the board.
         for z0, z1, radius in g.profile:
             body.add_geom(type=mujoco.mjtGeom.mjGEOM_CYLINDER,
                           size=[radius, 0.5 * (z1 - z0), 0],

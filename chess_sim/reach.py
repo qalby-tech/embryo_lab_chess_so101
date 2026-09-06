@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Callable
 
 import chess
 import numpy as np
@@ -24,10 +23,6 @@ MAX_TILT = np.radians(30)
 MAX_IK_ERROR = 0.008
 MAX_EXECUTED_ERROR = 0.005
 NEAR_FIELD_RADIUS = 0.14
-# candidate jaw-span directions (the moving jaw opens along one board axis)
-SPAN_DIRECTIONS = (np.array([0.0, 1.0]), np.array([0.0, -1.0]),
-                   np.array([1.0, 0.0]), np.array([-1.0, 0.0]))
-MAX_SPAN_ERROR = np.radians(20)   # a span the wrist roll cannot turn this close to is unusable
 
 
 def load_executed_reach(path: str = EXECUTED_REACH_FILE) -> dict[int, float]:
@@ -51,18 +46,14 @@ class ReachMap:
     leans over the board there (to keep it clear of neighboring pieces)."""
 
     board: BoardSpec
-    grasp_height: float
-    tool_query: Callable = field(repr=False, compare=False)
     squares: set[int] = field(default_factory=set)
     lean: dict[int, np.ndarray] = field(default_factory=dict)   # wrist overhang direction
-    _spans: dict[int, list[np.ndarray]] = field(default_factory=dict, repr=False)
 
     @classmethod
     def compute(cls, board: BoardSpec, tool_query, grasp_height: float,
                 executed: dict[int, float] | None = None) -> "ReachMap":
-        """`tool_query(target, span=None) -> (IkResult, tool_rotation)` for a
-        world target; the rotation's columns are the tool x (approach) and z
-        (jaw span) axes."""
+        """`tool_query(target) -> (IkResult, tool_rotation)` for a world target;
+        the rotation's first column is the tool x (approach) axis."""
         executed = load_executed_reach() if executed is None else executed
         ax, ay, _ = board.arm_base
         squares, lean = set(), {}
@@ -79,27 +70,10 @@ class ReachMap:
             # the gripper body lies along -approach from the fingertips
             h = -mat[:2, 0]
             lean[sq] = h / (np.linalg.norm(h) + 1e-9)
-        return cls(board=board, grasp_height=grasp_height, tool_query=tool_query,
-                   squares=squares, lean=lean)
+        return cls(board=board, squares=squares, lean=lean)
 
     def __contains__(self, square: int) -> bool:
         return square in self.squares
-
-    def feasible_spans(self, square: int) -> list[np.ndarray]:
-        """Jaw-span directions the wrist roll can realize at `square`, in
-        SPAN_DIRECTIONS order (solved on first use, then cached)."""
-        if square not in self._spans:
-            x, y = self.board.square_center(square)
-            target = np.array([x, y, self.board.top + self.grasp_height])
-            feasible = []
-            for d in SPAN_DIRECTIONS:
-                res, mat = self.tool_query(target, span=d)
-                z = mat[:2, 2] / (np.linalg.norm(mat[:2, 2]) + 1e-9)
-                if (res.position_error <= MAX_IK_ERROR and res.tilt <= MAX_TILT
-                        and np.arccos(np.clip(np.dot(z, d), -1.0, 1.0)) <= MAX_SPAN_ERROR):
-                    feasible.append(d)
-            self._spans[square] = feasible
-        return self._spans[square]
 
     def overhang_squares(self, square: int) -> list[int]:
         """Squares under the leaning wrist body when working on `square`

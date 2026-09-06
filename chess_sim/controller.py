@@ -45,8 +45,12 @@ class PickPlaceController:
         px, py, _ = env.piece_position(slot)
         self._span_grasp = env.free_span_direction((px, py), exclude=slot)
         self._span_place = env.free_span_direction(target_xy, exclude=slot)
-        z_grasp = max(board.top + g.waist,
-                      board.top + gripper.TIP_CLEARANCE + gripper.TIP_X - gripper.POCKET_X)
+        # Pocket height: the piece's grasp height, unless the fingertips would
+        # touch the board or the pads would reach down into a wider segment
+        # below the one they clamp (a rook's base flange).
+        z_grasp = board.top + max(g.waist,
+                                  gripper.TIP_CLEARANCE + gripper.TIP_X - gripper.POCKET_X,
+                                  g.flange_top + gripper.PAD_REACH)
         # Open prongs must clear everything the pads span vertically on the way
         # in and out (a rook's base flange as much as a king's crown), so they
         # are positioned around the widest radius in that band; the hold gap
@@ -63,8 +67,9 @@ class PickPlaceController:
         place_pt = np.array([target_xy[0], target_xy[1], z_grasp])
         off_hold = gripper.pocket_offset(gap_hold)
         # while the jaws are open, keep the piece as close to the FIXED prong as
-        # its crown allows: the moving jaw opens toward the free side, so the
-        # opening slack goes there rather than into an occupied neighbor square
+        # the widest radius in the pad band allows: the moving jaw opens toward
+        # the free side, so the opening slack goes there rather than into an
+        # occupied neighbor square
         off_open = gripper.pocket_offset(2 * clear)
         off_release = off_open
 
