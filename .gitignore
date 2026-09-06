@@ -1,0 +1,15 @@
+# generated data and renders
+datasets/
+sim/out/
+*.mp4
+
+# third-party checkout (its SO-101 files are vendored under chess_sim/assets/so101)
+so_arm_repo/
+
+# python / tooling
+__pycache__/
+*.pyc
+
+# local agent notes
+.claude/
+CLAUDE.md

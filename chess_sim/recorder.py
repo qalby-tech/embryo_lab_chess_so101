@@ -1,0 +1,72 @@
+"""Episode recording in a LeRobot-compatible layout.
+
+    rec = EpisodeRecorder(env, "datasets/chess")
+    rec.begin(instruction="move the white knight from g1 to f3", fen=env.board.fen())
+    result = env.move("g1", "f3", on_step=rec.on_step)
+    rec.end(success=result.success, extra={"move": "g1f3"})
+
+Each episode directory holds data.npz (observation.state, action at the control
+rate), one mp4 per camera, and meta.json; a manifest.jsonl indexes them.
+"""
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field
+
+import imageio.v2 as imageio
+import numpy as np
+
+from .env import JOINTS
+
+
+@dataclass
+class _Buffer:
+    states: list = field(default_factory=list)
+    actions: list = field(default_factory=list)
+    frames: dict[str, list] = field(default_factory=dict)
+
+
+class EpisodeRecorder:
+    def __init__(self, env, root: str):
+        self.env = env
+        self.root = root
+        os.makedirs(root, exist_ok=True)
+        self._index = self._next_index()
+        self._meta: dict = {}
+        self._buf = _Buffer()
+
+    def begin(self, instruction: str, **meta) -> None:
+        self._buf = _Buffer(frames={cam: [] for cam in self.env.cameras})
+        self._meta = {"instruction": instruction, "fps": self.env.control_hz,
+                      "joints": list(JOINTS), **meta}
+
+    def on_step(self, action: np.ndarray) -> None:
+        """Pass as `on_step` to env.move()/apply_action(); samples before each action."""
+        obs = self.env.observe(images=True)
+        self._buf.states.append(obs.joint_pos)
+        self._buf.actions.append(np.array(action, dtype=np.float32))
+        for cam, frame in obs.images.items():
+            self._buf.frames[cam].append(frame)
+
+    def end(self, success: bool, **extra) -> str:
+        ep_dir = os.path.join(self.root, f"episode_{self._index:04d}")
+        os.makedirs(ep_dir, exist_ok=True)
+        np.savez_compressed(os.path.join(ep_dir, "data.npz"),
+                            observation_state=np.array(self._buf.states, dtype=np.float32),
+                            action=np.array(self._buf.actions, dtype=np.float32))
+        for cam, frames in self._buf.frames.items():
+            if frames:
+                imageio.mimsave(os.path.join(ep_dir, f"{cam}.mp4"), frames, fps=self.env.control_hz)
+        meta = {**self._meta, **extra, "success": bool(success),
+                "steps": len(self._buf.actions), "episode": self._index}
+        with open(os.path.join(ep_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+        with open(os.path.join(self.root, "manifest.jsonl"), "a") as f:
+            f.write(json.dumps(meta) + "\n")
+        self._index += 1
+        return ep_dir
+
+    def _next_index(self) -> int:
+        existing = [d for d in os.listdir(self.root) if d.startswith("episode_")]
+        return max((int(d.split("_")[1]) for d in existing), default=-1) + 1
