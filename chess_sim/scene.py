@@ -15,10 +15,12 @@ import mujoco
 import numpy as np
 
 from . import assets, gripper
+from .appearance import Appearance
 from .assets import SET_COUNTS, PieceGeometry, piece_asset_name, piece_geometry
 from .board import BoardSpec
 
 ARM_PREFIX = "so101:"
+KEY_LIGHT_DIFFUSE = np.array([0.85, 0.82, 0.75])
 # The real SO-101 rig has exactly two cameras: the overhead camera on the mast
 # and a wrist camera on the gripper. Datasets record those; "external" is a
 # fixed side view for demos and debugging only.
@@ -41,7 +43,7 @@ class PieceSlot:
     geometry: PieceGeometry
 
 
-def piece_slots(board: BoardSpec) -> list[PieceSlot]:
+def piece_slots(board: BoardSpec, piece_scale: float = 1.0) -> list[PieceSlot]:
     """The fixed set of piece bodies, in a stable order."""
     slots = []
     for color in (chess.WHITE, chess.BLACK):
@@ -51,7 +53,7 @@ def piece_slots(board: BoardSpec) -> list[PieceSlot]:
                 slots.append(PieceSlot(
                     body=f"{piece_asset_name(piece)}{i}",
                     piece=piece,
-                    geometry=piece_geometry(piece, board.square),
+                    geometry=piece_geometry(piece, board.square, piece_scale),
                 ))
     return slots
 
@@ -72,9 +74,9 @@ def _add_camera(spec, name, pos, target, fovy=42, up=(0.0, 0.0, 1.0)):
                               xyaxes=list(_lookat_xyaxes(pos, target, up)), fovy=fovy)
 
 
-def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
+def build_scene(board: BoardSpec = BoardSpec(), appearance: Appearance = Appearance()) -> mujoco.MjSpec:
     """Assemble the MjSpec. Mesh/texture paths are relative to the assets dir."""
-    assets.ensure_scene_assets(board)
+    board_texture = assets.ensure_scene_assets(board, appearance)
     spec = mujoco.MjSpec()
     spec.modelname = "chess_so101"
     spec.meshdir = assets.ASSET_DIR
@@ -93,9 +95,9 @@ def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
     spec.stat.extent = 1.0
     spec.visual.map.znear = 0.004
 
-    _add_environment(spec, board)
-    _add_board(spec, board)
-    _add_pieces(spec, board)
+    _add_environment(spec, board, appearance)
+    _add_board(spec, board, board_texture)
+    _add_pieces(spec, board, appearance)
     _add_arm(spec, board)
     camera_pos = _add_camera_mast(spec, board)
 
@@ -136,7 +138,7 @@ def _add_camera_mast(spec, board) -> tuple[float, float, float]:
     return (mx, ay + 0.02 + housing[1] + 0.005, cam_z)   # lens just ahead of the housing
 
 
-def _add_environment(spec, board):
+def _add_environment(spec, board, appearance):
     spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_PLANE, size=[6, 6, 0.1],
                             rgba=[0.5, 0.42, 0.34, 1])
     spec.add_mesh(name="backdrop", file="scene/pano_cylinder.obj")
@@ -146,15 +148,17 @@ def _add_environment(spec, board):
     mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "backdrop_tex"
     spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="backdrop",
                             material="backdrop_mat", contype=0, conaffinity=0, group=1)
-    spec.worldbody.add_light(pos=[0.8, -0.8, 2.2], dir=[-0.3, 0.3, -1],
-                             diffuse=[0.85, 0.82, 0.75], specular=[0.3, 0.3, 0.3],
-                             castshadow=True)
-    spec.worldbody.add_light(pos=[-1.2, 1.0, 1.8], dir=[0.5, -0.4, -1],
+    key_dir = np.asarray(appearance.light_dir, dtype=float)
+    key_dir /= np.linalg.norm(key_dir)
+    spec.worldbody.add_light(name="key", pos=list(-2.4 * key_dir + [0, 0, 0.4]), dir=list(key_dir),
+                             diffuse=list(KEY_LIGHT_DIFFUSE * appearance.light_intensity),
+                             specular=[0.3, 0.3, 0.3], castshadow=True)
+    spec.worldbody.add_light(name="fill", pos=[-1.2, 1.0, 1.8], dir=[0.5, -0.4, -1],
                              diffuse=[0.35, 0.36, 0.4], castshadow=False)
     # table and arm pedestal
-    spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX,
+    spec.worldbody.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX,
                             size=[0.36, 0.30, board.table_top / 2],
-                            pos=[0, 0, board.table_top / 2], rgba=[0.42, 0.28, 0.17, 1])
+                            pos=[0, 0, board.table_top / 2], rgba=[*appearance.table_rgb, 1])
     ax, ay, az = board.arm_base
     if board.arm_riser > 0:
         spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -163,9 +167,8 @@ def _add_environment(spec, board):
                                 rgba=[0.25, 0.25, 0.28, 1])
 
 
-def _add_board(spec, board):
-    spec.add_texture(name="board_tex", type=mujoco.mjtTexture.mjTEXTURE_2D,
-                     file="scene/board_texture.png")
+def _add_board(spec, board, texture_file):
+    spec.add_texture(name="board_tex", type=mujoco.mjtTexture.mjTEXTURE_2D, file=texture_file)
     mat = spec.add_material(name="board_mat", reflectance=0.04)
     mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "board_tex"
     spec.worldbody.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -174,9 +177,9 @@ def _add_board(spec, board):
                             material="board_mat")
 
 
-def _add_pieces(spec, board):
+def _add_pieces(spec, board, appearance):
     kinds_done = set()
-    for i, slot in enumerate(piece_slots(board)):
+    for i, slot in enumerate(piece_slots(board, appearance.piece_scale)):
         kind = piece_asset_name(slot.piece)
         g = slot.geometry
         if kind not in kinds_done:
@@ -184,7 +187,8 @@ def _add_pieces(spec, board):
                           scale=[g.scale] * 3)
             spec.add_texture(name=f"tex_{kind}", type=mujoco.mjtTexture.mjTEXTURE_2D,
                              file=f"pieces/{kind}/material_0.png")
-            mat = spec.add_material(name=f"mat_{kind}", reflectance=0.2)
+            tint = appearance.white_rgba if slot.piece.color == chess.WHITE else appearance.black_rgba
+            mat = spec.add_material(name=f"mat_{kind}", reflectance=0.2, rgba=list(tint))
             mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = f"tex_{kind}"
             kinds_done.add(kind)
         gx, gy = board.graveyard_slot(i)

@@ -1,14 +1,18 @@
 """Play random executable moves from random sparse positions and report success.
 
     python examples/play_random_moves.py --moves 10 --record datasets/chess
+    python examples/play_random_moves.py --moves 10 --randomize      # random look per episode
 """
 import argparse
 import random
 
 import chess
+import numpy as np
 
-from chess_sim import ChessSimEnv, EpisodeRecorder
+from chess_sim import Appearance, ChessSimEnv, EpisodeRecorder
 from chess_sim.assets import SET_COUNTS
+
+REBUILD_EVERY = 5   # with --randomize: new piece size / board every N episodes, new colors every episode
 
 # every non-king piece of a full set, drawn without replacement
 _SET_POOL = [chess.Piece(ptype, color)
@@ -39,13 +43,25 @@ def describe(board: chess.Board, move: chess.Move) -> str:
             f"from {chess.square_name(move.from_square)} to {chess.square_name(move.to_square)}")
 
 
-def run(moves: int, seed: int = 0, record: str | None = None) -> int:
-    """Play `moves` random moves; returns the number of verified successes."""
+def run(moves: int, seed: int = 0, record: str | None = None, randomize: bool = False) -> int:
+    """Play `moves` random moves; returns the number of verified successes.
+    With `randomize`, every episode gets a random look (`Appearance.random`):
+    colors and lighting change per episode, piece size and board texture
+    every REBUILD_EVERY episodes (those need a rebuilt scene)."""
     rng = random.Random(seed)
-    env = ChessSimEnv()
+    looks = np.random.default_rng(seed)
+    env = ChessSimEnv(appearance=Appearance.random(looks) if randomize else Appearance())
     recorder = EpisodeRecorder(env, record) if record else None
     successes = 0
     for i in range(moves):
+        if randomize and i > 0:
+            if i % REBUILD_EVERY == 0:
+                env.close()
+                env = ChessSimEnv(appearance=Appearance.random(looks))
+                if recorder:
+                    recorder = EpisodeRecorder(env, record)
+            else:
+                env.recolor(Appearance.random(looks))
         while True:
             board = random_position(rng, rng.randint(2, 8))
             env.reset(board.board_fen())
@@ -55,7 +71,8 @@ def run(moves: int, seed: int = 0, record: str | None = None) -> int:
         mv = rng.choice(candidates)
         instruction = describe(env.board, mv)
         if recorder:
-            recorder.begin(instruction, fen=env.board.fen(), move=mv.uci(), task="chess_move")
+            recorder.begin(instruction, fen=env.board.fen(), move=mv.uci(), task="chess_move",
+                           appearance=env.appearance.__dict__ if randomize else None)
         result = env.move(chess.square_name(mv.from_square), chess.square_name(mv.to_square),
                           on_step=recorder.on_step if recorder else None)
         if recorder:
@@ -74,8 +91,9 @@ def main():
     ap.add_argument("--moves", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--record", default=None, help="dataset directory (optional)")
+    ap.add_argument("--randomize", action="store_true", help="random appearance per episode")
     args = ap.parse_args()
-    run(args.moves, args.seed, args.record)
+    run(args.moves, args.seed, args.record, args.randomize)
 
 
 if __name__ == "__main__":

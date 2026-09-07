@@ -13,3 +13,6 @@ __pycache__/
 # local agent notes
 .claude/
 CLAUDE.md
+
+# per-appearance generated textures
+chess_sim/assets/scene/generated/

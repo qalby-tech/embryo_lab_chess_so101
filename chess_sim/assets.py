@@ -128,14 +128,15 @@ def _radius_at(path: str, fraction: float) -> float:
     return float(np.linalg.norm(pts - axis, axis=1).max())
 
 
-def piece_geometry(piece: chess.Piece, square: float) -> PieceGeometry:
-    """Scale a piece to the board: target height, footprint capped to the square."""
+def piece_geometry(piece: chess.Piece, square: float, piece_scale: float = 1.0) -> PieceGeometry:
+    """Scale a piece to the board: target height, footprint capped to the square;
+    `piece_scale` multiplies both (see `Appearance`)."""
     path = piece_obj_path(piece)
     lo, hi = _bounds(path)
     extent = hi - lo
-    target_h = _PIECE_HEIGHT[piece.piece_type] * (square / _REFERENCE_SQUARE)
+    target_h = _PIECE_HEIGHT[piece.piece_type] * (square / _REFERENCE_SQUARE) * piece_scale
     scale = min(target_h / max(extent[2], 1e-6),
-                0.88 * square / max(extent[0], extent[1], 1e-6))
+                0.88 * square * piece_scale / max(extent[0], extent[1], 1e-6))
     profile = tuple(
         (float(lo[2] + b * extent[2]) * scale, float(lo[2] + t * extent[2]) * scale,
          (_radius_at(path, f) + 0.0004) * scale)
@@ -152,17 +153,34 @@ def piece_geometry(piece: chess.Piece, square: float) -> PieceGeometry:
 
 # -- procedural scene assets (generated once, then reused) --------------------
 
-def ensure_scene_assets(board) -> None:
-    """Create the board texture and backdrop mesh if they are not vendored yet."""
-    if not os.path.exists(BOARD_TEXTURE):
-        _write_board_texture(BOARD_TEXTURE, board)
+GENERATED_DIR = os.path.join(ASSET_DIR, "scene", "generated")   # per-appearance textures, not vendored
+
+
+def ensure_scene_assets(board, appearance=None) -> str:
+    """Create the backdrop mesh and the board texture for `appearance` if they
+    do not exist yet; returns the texture path relative to the asset dir."""
     if not os.path.exists(BACKDROP_OBJ):
         _write_backdrop(BACKDROP_OBJ, BACKDROP_IMAGE)
+    if appearance is None or appearance.board_key == _DEFAULT_BOARD_KEY:
+        path = BOARD_TEXTURE
+        colors = None
+    else:
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        path = os.path.join(GENERATED_DIR, f"board_{appearance.board_key}.png")
+        colors = (appearance.light_square, appearance.dark_square, appearance.border)
+    if not os.path.exists(path):
+        _write_board_texture(path, board, colors)
+    return os.path.relpath(path, ASSET_DIR)
 
 
-def _write_board_texture(path: str, board, px_per_square: int = 128) -> None:
+_DEFAULT_BOARD_COLORS = ((214, 178, 132), (99, 64, 40), (92, 58, 32))
+_DEFAULT_BOARD_KEY = "-".join(f"{c:02x}" for rgb in _DEFAULT_BOARD_COLORS for c in rgb)
+
+
+def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128) -> None:
     from PIL import Image
 
+    light, dark, border = colors or _DEFAULT_BOARD_COLORS
     rng = np.random.default_rng(0)
     border_px = int(px_per_square * board.border / board.square)
     size = 8 * px_per_square + 2 * border_px
@@ -174,11 +192,11 @@ def _write_board_texture(path: str, board, px_per_square: int = 128) -> None:
         rows = rng.normal(0, 1, (shape[0], 1)) * 0.35
         return np.clip(base + (grain + rows) * variation, 0, 255)
 
-    for c, v in enumerate((92, 58, 32)):
+    for c, v in enumerate(border):
         img[..., c] = wood((size, size), v)
     for i in range(8):
         for j in range(8):
-            rgb = (214, 178, 132) if (i + j) % 2 else (99, 64, 40)
+            rgb = light if (i + j) % 2 else dark
             y0, x0 = border_px + i * px_per_square, border_px + j * px_per_square
             for c in range(3):
                 img[y0:y0 + px_per_square, x0:x0 + px_per_square, c] = wood(

@@ -7,9 +7,10 @@
     result = env.move("e2", "e4")     # scripted expert executes the move
     print(result.success, env.board.fen())
 """
+from .appearance import Appearance
 from .board import START_FEN, BoardSpec
 from .env import ChessSimEnv, MoveResult, Observation
 from .recorder import EpisodeRecorder
 
 __all__ = ["ChessSimEnv", "MoveResult", "Observation", "EpisodeRecorder",
-           "BoardSpec", "START_FEN"]
+           "BoardSpec", "Appearance", "START_FEN"]

@@ -15,12 +15,14 @@ import chess
 import mujoco
 import numpy as np
 
+from .appearance import Appearance
+from .assets import piece_asset_name
 from .board import START_FEN, BoardSpec, parse_square
 from .controller import PickPlaceController
 from .ik import So101Ik
 from .reach import ReachMap
-from .scene import (ARM_PREFIX, ROBOT_CAMERAS, PieceSlot, arm_rest_pose, build_arm, build_scene,
-                    export_xml, piece_slots)
+from .scene import (ARM_PREFIX, KEY_LIGHT_DIFFUSE, ROBOT_CAMERAS, PieceSlot, arm_rest_pose, build_arm,
+                    build_scene, export_xml, piece_slots)
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 PLACEMENT_TOLERANCE = 0.011   # piece axis vs square center
@@ -56,19 +58,20 @@ class MoveResult:
 
 
 class ChessSimEnv:
-    def __init__(self, board_spec: BoardSpec = BoardSpec(),
+    def __init__(self, board_spec: BoardSpec = BoardSpec(), appearance: Appearance = Appearance(),
                  cameras: tuple[str, ...] = ROBOT_CAMERAS,
                  image_size: tuple[int, int] = (640, 480),
                  control_hz: int = 30):
         self.board_spec = board_spec
-        self.spec = build_scene(board_spec)
+        self.appearance = appearance
+        self.spec = build_scene(board_spec, appearance)
         self.model = self.spec.compile()
         self.data = mujoco.MjData(self.model)
         self.control_hz = control_hz
         self.substeps = max(1, int(round(1.0 / (control_hz * self.model.opt.timestep))))
         self.board = chess.Board(None)
 
-        self.slots = piece_slots(board_spec)
+        self.slots = piece_slots(board_spec, appearance.piece_scale)
         self._slot_body = {s.body: mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, s.body)
                            for s in self.slots}
         self._slot_qpos = {s.body: self.model.jnt_qposadr[self.model.body_jntadr[self._slot_body[s.body]]]
@@ -132,6 +135,25 @@ class ChessSimEnv:
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+
+    def recolor(self, appearance: Appearance) -> None:
+        """Apply `appearance`'s colors and lighting to the compiled scene without
+        recompiling. Piece size and the board texture stay as built."""
+        m = self.model
+        for slot in self.slots:
+            mat = m.material(f"mat_{piece_asset_name(slot.piece)}")
+            mat.rgba[:] = appearance.white_rgba if slot.piece.color == chess.WHITE else appearance.black_rgba
+        m.geom("table").rgba[:] = [*appearance.table_rgb, 1.0]
+        key = m.light("key")
+        direction = np.asarray(appearance.light_dir, dtype=float)
+        direction /= np.linalg.norm(direction)
+        key.dir[:] = direction
+        key.pos[:] = -2.4 * direction + [0, 0, 0.4]
+        key.diffuse[:] = KEY_LIGHT_DIFFUSE * appearance.light_intensity
+        self.appearance = self.appearance.with_(
+            white_rgba=appearance.white_rgba, black_rgba=appearance.black_rgba,
+            table_rgb=appearance.table_rgb, light_intensity=appearance.light_intensity,
+            light_dir=appearance.light_dir)
 
     # -- control -------------------------------------------------------------
 
