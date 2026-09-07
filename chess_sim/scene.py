@@ -101,7 +101,7 @@ def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
 
     _add_camera(spec, "external", (-0.31, -0.16, board.top + 0.26), (0.0, 0.02, board.top + 0.04))
     # the overhead image is upright along the files: white at the bottom
-    _add_camera(spec, "top", camera_pos, (0.0, 0.0, board.top), fovy=48, up=(0.0, 1.0, 0.0))
+    _add_camera(spec, "top", camera_pos, (0.0, 0.0, board.top), fovy=40, up=(0.0, 1.0, 0.0))
     return spec
 
 

@@ -27,7 +27,8 @@ examples/                  play_game.py, play_random_moves.py, collect_dataset.p
 ```bash
 source ~/miniforge3/etc/profile.d/conda.sh && conda activate embodiedgen
 export MUJOCO_GL=egl PYTHONPATH=~/chess_so101
-python examples/play_game.py            # 20-ply game from the initial position, video from both cameras
+python examples/play_game.py            # 20-ply game from the initial position, side-view video
+python examples/play_game.py --cameras external top wrist   # all three views side by side
 python examples/play_random_moves.py --moves 5
 ```
 
