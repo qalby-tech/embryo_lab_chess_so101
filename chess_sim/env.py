@@ -284,5 +284,6 @@ class ChessSimEnv:
     # -- export --------------------------------------------------------------
 
     def export_xml(self, path: str) -> str:
-        """Standalone MuJoCo XML of the scene (pieces at their graveyard slots)."""
-        return export_xml(self.spec, path)
+        """Standalone MuJoCo XML of the scene in its current position: open it
+        with `python -m mujoco.viewer --mjcf <path>`."""
+        return export_xml(self.spec, path, self.model, self.data)

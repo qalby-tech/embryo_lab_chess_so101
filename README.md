@@ -32,6 +32,13 @@ python examples/play_game.py --cameras external top wrist   # all three views si
 python examples/play_random_moves.py --moves 5
 ```
 
+Live in the MuJoCo viewer (needs a display; WSLg on WSL2 works):
+
+```bash
+python examples/play_game.py --viewer               # the game plays in real time, mouse-controlled camera
+python -m mujoco.viewer --mjcf chess_sim/assets/scene/chess_so101.xml   # just the scene, initial position
+```
+
 ```python
 from chess_sim import ChessSimEnv, START_FEN
 

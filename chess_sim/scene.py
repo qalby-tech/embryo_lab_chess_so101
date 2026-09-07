@@ -269,8 +269,24 @@ def arm_rest_pose() -> dict[str, float]:
     return dict(_ARM_REST)
 
 
-def export_xml(spec: mujoco.MjSpec, path: str) -> str:
-    """Write a standalone MuJoCo XML for the scene; returns the path."""
+def export_xml(spec: mujoco.MjSpec, path: str, model: mujoco.MjModel | None = None,
+               data: mujoco.MjData | None = None) -> str:
+    """Write a standalone MuJoCo XML for the scene; returns the path.
+
+    With `model`/`data`, the pieces' body poses are written as they stand now
+    and a keyframe `position` holds the full state (arm included), so the file
+    opens in the MuJoCo viewer showing the current position."""
+    if data is not None:
+        for body in spec.worldbody.bodies:
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body.name)
+            if bid >= 0 and model.body_jntnum[bid] == 1 and \
+                    model.jnt_type[model.body_jntadr[bid]] == mujoco.mjtJoint.mjJNT_FREE:
+                adr = model.jnt_qposadr[model.body_jntadr[bid]]
+                body.pos = data.qpos[adr:adr + 3]
+                body.quat = data.qpos[adr + 3:adr + 7]
+        key = next((k for k in spec.keys if k.name == "position"), None) or spec.add_key()
+        key.name = "position"
+        key.qpos = data.qpos.copy()
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w") as f:
         f.write(spec.to_xml())

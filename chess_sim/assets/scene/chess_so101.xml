@@ -3,6 +3,8 @@
 
   <option impratio="10" cone="elliptic"/>
 
+  <size nkey="1"/>
+
   <statistic extent="1"/>
 
   <visual>
@@ -117,7 +119,7 @@
     <camera name="top" quat="0.987569 0.106489 0.114949 -0.0123948" pos="0.16 -0.152 1.12" fovy="40"/>
     <light pos="0.8 -0.8 2.2" dir="-0.276172 0.276172 -0.920575" diffuse="0.85 0.82 0.75"/>
     <light castshadow="false" pos="-1.2 1 1.8" dir="0.421076 -0.336861 -0.842152" diffuse="0.35 0.36 0.4"/>
-    <body name="white_pawn1" pos="0.187 -0.112 0.443598">
+    <body name="white_pawn1" pos="0.0979905 -0.0699973 0.455509" quat="1 8.47516e-07 3.34789e-05 -5.34451e-07">
       <joint name="white_pawn1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -125,7 +127,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn2" pos="0.222 -0.112 0.443598">
+    <body name="white_pawn2" pos="0.0699893 -0.0699971 0.455508" quat="1 -8.38116e-06 -5.70229e-06 2.41323e-07">
       <joint name="white_pawn2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -133,7 +135,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn3" pos="0.257 -0.112 0.443598">
+    <body name="white_pawn3" pos="0.0419897 -0.0699985 0.45551" quat="1 4.2869e-05 7.7336e-06 -9.92948e-08">
       <joint name="white_pawn3_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -141,7 +143,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn4" pos="0.292 -0.112 0.443598">
+    <body name="white_pawn4" pos="0.0139886 -0.0699979 0.45551" quat="1 2.26287e-05 -3.21232e-05 1.02177e-06">
       <joint name="white_pawn4_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -149,7 +151,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn5" pos="0.187 -0.077 0.443598">
+    <body name="white_pawn5" pos="-0.0140099 -0.0699986 0.45551" quat="1 4.49325e-05 2.23829e-05 -3.41437e-06">
       <joint name="white_pawn5_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -157,7 +159,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn6" pos="0.222 -0.077 0.443598">
+    <body name="white_pawn6" pos="-0.0420104 -0.0699989 0.45551" quat="1 5.81885e-05 5.48766e-06 -3.6048e-07">
       <joint name="white_pawn6_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -165,7 +167,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn7" pos="0.257 -0.077 0.443598">
+    <body name="white_pawn7" pos="-0.0700104 -0.0699972 0.455508" quat="1 -5.70229e-06 8.38116e-06 2.41323e-07">
       <joint name="white_pawn7_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -173,7 +175,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_pawn8" pos="0.292 -0.077 0.443598">
+    <body name="white_pawn8" pos="-0.0980121 -0.0699979 0.455509" quat="1 2.07457e-05 -5.56144e-05 4.65713e-08">
       <joint name="white_pawn8_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>
       <geom size="0.00655407 0.0034" pos="1.054e-05 -2.72e-06 -0.010198" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -181,7 +183,7 @@
       <geom size="0.00268728 0.00272" pos="1.054e-05 -2.72e-06 0.00136204" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0041608 0.00476" pos="1.054e-05 -2.72e-06 0.00884204" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_rook1" pos="0.187 -0.042 0.445198">
+    <body name="white_rook1" pos="0.0979896 -0.098006 0.457107" quat="1 3.61392e-05 3.30076e-05 5.46387e-07">
       <joint name="white_rook1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_rook" mesh="mesh_white_rook"/>
       <geom size="0.0109506 0.0038" pos="1.14585e-05 4.91077e-06 -0.0113981" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -189,7 +191,7 @@
       <geom size="0.00503067 0.00304" pos="1.14585e-05 4.91077e-06 0.00152187" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0050328 0.00532" pos="1.14585e-05 4.91077e-06 0.00988187" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_rook2" pos="0.222 -0.042 0.445198">
+    <body name="white_rook2" pos="-0.0980126 -0.0980059 0.457107" quat="1 3.30076e-05 -3.61392e-05 5.46387e-07">
       <joint name="white_rook2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_rook" mesh="mesh_white_rook"/>
       <geom size="0.0109506 0.0038" pos="1.14585e-05 4.91077e-06 -0.0113981" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -197,7 +199,7 @@
       <geom size="0.00503067 0.00304" pos="1.14585e-05 4.91077e-06 0.00152187" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.0050328 0.00532" pos="1.14585e-05 4.91077e-06 0.00988187" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_knight1" pos="0.257 -0.042 0.446794">
+    <body name="white_knight1" pos="0.0699983 -0.0980003 0.458705" quat="1 2.96063e-05 6.02966e-06 -1.86551e-07">
       <joint name="white_knight1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_knight" mesh="mesh_white_knight"/>
       <geom size="0.00908181 0.0042" pos="1.86667e-06 -7.46667e-07 -0.012594" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -205,7 +207,7 @@
       <geom size="0.00880836 0.00336" pos="1.86667e-06 -7.46667e-07 0.00168597" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00656312 0.00588" pos="1.86667e-06 -7.46667e-07 0.010926" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_knight2" pos="0.292 -0.042 0.446794">
+    <body name="white_knight2" pos="-0.0700021 -0.0980007 0.458705" quat="1 4.05004e-05 -6.39311e-06 -4.99961e-07">
       <joint name="white_knight2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_knight" mesh="mesh_white_knight"/>
       <geom size="0.00908181 0.0042" pos="1.86667e-06 -7.46667e-07 -0.012594" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -213,7 +215,7 @@
       <geom size="0.00880836 0.00336" pos="1.86667e-06 -7.46667e-07 0.00168597" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00656312 0.00588" pos="1.86667e-06 -7.46667e-07 0.010926" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_bishop1" pos="0.187 -0.007 0.448426">
+    <body name="white_bishop1" pos="0.0419987 -0.0980072 0.460337" quat="1 4.78242e-05 5.74304e-06 -5.43295e-07">
       <joint name="white_bishop1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_bishop" mesh="mesh_white_bishop"/>
       <geom size="0.00672351 0.0046" pos="1.472e-06 5.39733e-06 -0.0138255" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -221,7 +223,7 @@
       <geom size="0.00604877 0.00368" pos="1.472e-06 5.39733e-06 0.00181449" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00490283 0.00644" pos="1.472e-06 5.39733e-06 0.0119345" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_bishop2" pos="0.222 -0.007 0.448426">
+    <body name="white_bishop2" pos="-0.0420018 -0.0980068 0.460337" quat="1 3.65317e-05 -9.62248e-06 -6.52376e-06">
       <joint name="white_bishop2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_bishop" mesh="mesh_white_bishop"/>
       <geom size="0.00672351 0.0046" pos="1.472e-06 5.39733e-06 -0.0138255" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -229,7 +231,7 @@
       <geom size="0.00604877 0.00368" pos="1.472e-06 5.39733e-06 0.00181449" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00490283 0.00644" pos="1.472e-06 5.39733e-06 0.0119345" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_queen1" pos="0.257 -0.007 0.450811">
+    <body name="white_queen1" pos="-0.0139964 -0.098002 0.462723" quat="1 3.48226e-05 1.54102e-05 -1.18898e-06">
       <joint name="white_queen1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_queen" mesh="mesh_white_queen"/>
       <geom size="0.0110518 0.0052" pos="-2.93647e-06 4.89412e-07 -0.0156113" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -237,7 +239,7 @@
       <geom size="0.00385311 0.00416" pos="-2.93647e-06 4.89412e-07 0.00206874" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00635272 0.00728" pos="-2.93647e-06 4.89412e-07 0.0135087" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="white_king1" pos="0.292 -0.007 0.453205">
+    <body name="white_king1" pos="0.0139992 -0.098002 0.465117" quat="1 2.13319e-05 4.77663e-06 -4.99709e-07">
       <joint name="white_king1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_king" mesh="mesh_white_king"/>
       <geom size="0.00866714 0.0058" pos="9.76842e-07 9.76842e-07 -0.0174049" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -245,7 +247,7 @@
       <geom size="0.00385157 0.00464" pos="9.76842e-07 9.76842e-07 0.00231512" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00631988 0.00812" pos="9.76842e-07 9.76842e-07 0.0150751" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn1" pos="0.187 0.028 0.443607">
+    <body name="black_pawn1" pos="0.0979987 0.0700006 0.455517" quat="1 -5.93908e-06 2.50845e-05 -2.13987e-07">
       <joint name="black_pawn1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -253,7 +255,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn2" pos="0.222 0.028 0.443607">
+    <body name="black_pawn2" pos="0.0699981 0.0700005 0.455517" quat="1 -8.76354e-07 2.01509e-06 2.24042e-07">
       <joint name="black_pawn2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -261,7 +263,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn3" pos="0.257 0.028 0.443607">
+    <body name="black_pawn3" pos="0.0419978 0.0700015 0.455519" quat="1 -3.73334e-05 -7.18056e-06 -3.69992e-07">
       <joint name="black_pawn3_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -269,7 +271,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn4" pos="0.292 0.028 0.443607">
+    <body name="black_pawn4" pos="0.0139975 0.0700015 0.455519" quat="1 -3.89642e-05 -1.5546e-05 -2.68032e-06">
       <joint name="black_pawn4_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -277,7 +279,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn5" pos="0.187 0.063 0.443607">
+    <body name="black_pawn5" pos="-0.0140013 0.070001 0.455519" quat="1 -2.0125e-05 2.80641e-05 8.1511e-07">
       <joint name="black_pawn5_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -285,7 +287,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn6" pos="0.222 0.063 0.443607">
+    <body name="black_pawn6" pos="-0.042002 0.0700014 0.455519" quat="1 -3.38469e-05 1.05479e-06 -2.94121e-07">
       <joint name="black_pawn6_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -293,7 +295,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn7" pos="0.257 0.063 0.443607">
+    <body name="black_pawn7" pos="-0.0700021 0.0700005 0.455517" quat="1 -2.01509e-06 -8.76354e-07 2.24042e-07">
       <joint name="black_pawn7_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -301,7 +303,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_pawn8" pos="0.292 0.063 0.443607">
+    <body name="black_pawn8" pos="-0.0980027 0.0700004 0.455518" quat="1 3.63447e-06 -2.27942e-05 -4.69751e-07">
       <joint name="black_pawn8_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_pawn" mesh="mesh_black_pawn"/>
       <geom size="0.0083453 0.0034" pos="2.04e-06 -4.53333e-07 -0.0102068" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -309,7 +311,7 @@
       <geom size="0.00374601 0.00272" pos="2.04e-06 -4.53333e-07 0.0013532" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00494158 0.00476" pos="2.04e-06 -4.53333e-07 0.0088332" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_rook1" pos="0.187 0.098 0.44522">
+    <body name="black_rook1" pos="0.098003 0.0980174 0.457129" quat="1 -4.44709e-05 4.74482e-05 6.84723e-07">
       <joint name="black_rook1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_rook" mesh="mesh_black_rook"/>
       <geom size="0.00791006 0.0038" pos="-1.51998e-06 -1.60683e-05 -0.0114202" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -317,7 +319,7 @@
       <geom size="0.00331872 0.00304" pos="-1.51998e-06 -1.60683e-05 0.00149981" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00429197 0.00532" pos="-1.51998e-06 -1.60683e-05 0.00985981" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_rook2" pos="0.222 0.098 0.44522">
+    <body name="black_rook2" pos="-0.0979998 0.0980175 0.457129" quat="1 -4.74482e-05 -4.44709e-05 6.84723e-07">
       <joint name="black_rook2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_rook" mesh="mesh_black_rook"/>
       <geom size="0.00791006 0.0038" pos="-1.51998e-06 -1.60683e-05 -0.0114202" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -325,7 +327,7 @@
       <geom size="0.00331872 0.00304" pos="-1.51998e-06 -1.60683e-05 0.00149981" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00429197 0.00532" pos="-1.51998e-06 -1.60683e-05 0.00985981" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_knight1" pos="0.257 0.098 0.445983">
+    <body name="black_knight1" pos="0.069968 0.0979962 0.457894" quat="1 -2.90658e-05 4.80537e-06 -4.7004e-07">
       <joint name="black_knight1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_knight" mesh="mesh_black_knight"/>
       <geom size="0.0115649 0.00399643" pos="3.21713e-05 4.79572e-06 -0.0119865" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -333,7 +335,7 @@
       <geom size="0.0115939 0.00319715" pos="3.21713e-05 4.79572e-06 0.00160137" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00925097 0.005595" pos="3.21713e-05 4.79572e-06 0.0103935" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_knight2" pos="0.292 0.098 0.445983">
+    <body name="black_knight2" pos="-0.0700327 0.0979962 0.457894" quat="1 -3.04539e-05 -1.50232e-05 -4.91104e-07">
       <joint name="black_knight2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_knight" mesh="mesh_black_knight"/>
       <geom size="0.0115649 0.00399643" pos="3.21713e-05 4.79572e-06 -0.0119865" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -341,7 +343,7 @@
       <geom size="0.0115939 0.00319715" pos="3.21713e-05 4.79572e-06 0.00160137" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00925097 0.005595" pos="3.21713e-05 4.79572e-06 0.0103935" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_bishop1" pos="0.187 0.133 0.448402">
+    <body name="black_bishop1" pos="0.0420018 0.0980084 0.460314" quat="1 -3.94644e-05 -3.71146e-06 1.14421e-07">
       <joint name="black_bishop1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_bishop" mesh="mesh_black_bishop"/>
       <geom size="0.0104596 0.0046" pos="-1.96267e-06 -6.86933e-06 -0.013802" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -349,7 +351,7 @@
       <geom size="0.00951838 0.00368" pos="-1.96267e-06 -6.86933e-06 0.00183804" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00571619 0.00644" pos="-1.96267e-06 -6.86933e-06 0.011958" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_bishop2" pos="0.222 0.133 0.448402">
+    <body name="black_bishop2" pos="-0.041998 0.0980079 0.460313" quat="1 -2.66003e-05 2.35737e-06 -5.35254e-07">
       <joint name="black_bishop2_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_bishop" mesh="mesh_black_bishop"/>
       <geom size="0.0104596 0.0046" pos="-1.96267e-06 -6.86933e-06 -0.013802" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -357,7 +359,7 @@
       <geom size="0.00951838 0.00368" pos="-1.96267e-06 -6.86933e-06 0.00183804" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00571619 0.00644" pos="-1.96267e-06 -6.86933e-06 0.011958" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_queen1" pos="0.257 0.133 0.45081">
+    <body name="black_queen1" pos="-0.0139939 0.0980118 0.462722" quat="1 -3.52048e-05 -9.47607e-07 -4.73203e-07">
       <joint name="black_queen1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_queen" mesh="mesh_black_queen"/>
       <geom size="0.0102565 0.0052" pos="-6.11765e-06 -1.02776e-05 -0.0156103" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -365,7 +367,7 @@
       <geom size="0.00357893 0.00416" pos="-6.11765e-06 -1.02776e-05 0.00206972" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00658343 0.00728" pos="-6.11765e-06 -1.02776e-05 0.0135097" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="black_king1" pos="0.292 0.133 0.452288">
+    <body name="black_king1" pos="0.014008 0.0980243 0.4642" quat="1 -2.51137e-05 3.64158e-06 -1.05479e-06">
       <joint name="black_king1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_black_king" mesh="mesh_black_king"/>
       <geom size="0.0125234 0.00557093" pos="-7.7993e-06 -2.31751e-05 -0.0167172" type="cylinder" rgba="1 1 1 0" density="600"/>
@@ -446,4 +448,8 @@
     <general name="so101:wrist_roll" class="so101:sts3215" joint="so101:wrist_roll" ctrlrange="-2.74385 2.84121" forcerange="-3.35 3.35"/>
     <general name="so101:gripper" class="so101:sts3215" joint="so101:gripper" ctrlrange="-0.17453 1.74533" forcerange="-3.35 3.35"/>
   </actuator>
+
+  <keyframe>
+    <key name="position" qpos="0.0979905 -0.0699973 0.455509 1 8.47516e-07 3.34789e-05 -5.34451e-07 0.0699893 -0.0699971 0.455508 1 -8.38116e-06 -5.70229e-06 2.41323e-07 0.0419897 -0.0699985 0.45551 1 4.2869e-05 7.7336e-06 -9.92948e-08 0.0139886 -0.0699979 0.45551 1 2.26287e-05 -3.21232e-05 1.02177e-06 -0.0140099 -0.0699986 0.45551 1 4.49325e-05 2.23829e-05 -3.41437e-06 -0.0420104 -0.0699989 0.45551 1 5.81885e-05 5.48766e-06 -3.6048e-07 -0.0700104 -0.0699972 0.455508 1 -5.70229e-06 8.38116e-06 2.41323e-07 -0.0980121 -0.0699979 0.455509 1 2.07457e-05 -5.56144e-05 4.65713e-08 0.0979896 -0.098006 0.457107 1 3.61392e-05 3.30076e-05 5.46387e-07 -0.0980126 -0.0980059 0.457107 1 3.30076e-05 -3.61392e-05 5.46387e-07 0.0699983 -0.0980003 0.458705 1 2.96063e-05 6.02966e-06 -1.86551e-07 -0.0700021 -0.0980007 0.458705 1 4.05004e-05 -6.39311e-06 -4.99961e-07 0.0419987 -0.0980072 0.460337 1 4.78242e-05 5.74304e-06 -5.43295e-07 -0.0420018 -0.0980068 0.460337 1 3.65317e-05 -9.62248e-06 -6.52376e-06 -0.0139964 -0.098002 0.462723 1 3.48226e-05 1.54102e-05 -1.18898e-06 0.0139992 -0.098002 0.465117 1 2.13319e-05 4.77663e-06 -4.99709e-07 0.0979987 0.0700006 0.455517 1 -5.93908e-06 2.50845e-05 -2.13987e-07 0.0699981 0.0700005 0.455517 1 -8.76354e-07 2.01509e-06 2.24042e-07 0.0419978 0.0700015 0.455519 1 -3.73334e-05 -7.18056e-06 -3.69992e-07 0.0139975 0.0700015 0.455519 1 -3.89642e-05 -1.5546e-05 -2.68032e-06 -0.0140013 0.070001 0.455519 1 -2.0125e-05 2.80641e-05 8.1511e-07 -0.042002 0.0700014 0.455519 1 -3.38469e-05 1.05479e-06 -2.94121e-07 -0.0700021 0.0700005 0.455517 1 -2.01509e-06 -8.76354e-07 2.24042e-07 -0.0980027 0.0700004 0.455518 1 3.63447e-06 -2.27942e-05 -4.69751e-07 0.098003 0.0980174 0.457129 1 -4.44709e-05 4.74482e-05 6.84723e-07 -0.0979998 0.0980175 0.457129 1 -4.74482e-05 -4.44709e-05 6.84723e-07 0.069968 0.0979962 0.457894 1 -2.90658e-05 4.80537e-06 -4.7004e-07 -0.0700327 0.0979962 0.457894 1 -3.04539e-05 -1.50232e-05 -4.91104e-07 0.0420018 0.0980084 0.460314 1 -3.94644e-05 -3.71146e-06 1.14421e-07 -0.041998 0.0980079 0.460313 1 -2.66003e-05 2.35737e-06 -5.35254e-07 -0.0139939 0.0980118 0.462722 1 -3.52048e-05 -9.47607e-07 -4.73203e-07 0.014008 0.0980243 0.4642 1 -2.51137e-05 3.64158e-06 -1.05479e-06 0 -0.999876 1.30042 0.400092 -4.6858e-08 0.599996"/>
+  </keyframe>
 </mujoco>
