@@ -108,7 +108,7 @@
   <worldbody>
     <geom size="6 6 0.1" type="plane" rgba="0.5 0.42 0.34 1"/>
     <geom type="mesh" contype="0" conaffinity="0" group="1" material="backdrop_mat" mesh="backdrop"/>
-    <geom size="0.36 0.3 0.215" pos="0 0 0.215" type="box" rgba="0.42 0.28 0.17 1"/>
+    <geom name="table" size="0.36 0.3 0.215" pos="0 0 0.215" type="box" rgba="0.42 0.28 0.17 1"/>
     <geom size="0.055 0.055 0.03" pos="0 -0.207 0.46" type="box" rgba="0.25 0.25 0.28 1"/>
     <geom name="board" size="0.127 0.127 0.006" pos="0 0 0.436" type="box" material="board_mat"/>
     <geom name="mast_plate" size="0.14 0.07 0.005" pos="0.08 -0.207 0.495" type="box" rgba="0.78 0.86 0.2 1"/>
@@ -116,9 +116,9 @@
     <geom name="mast_upper" size="0.015 0.015 0.2" pos="0.16 -0.207 0.9" type="box" rgba="0.08 0.08 0.08 1"/>
     <geom name="mast_camera" size="0.015 0.03 0.02" pos="0.16 -0.187 1.12" type="box" contype="0" conaffinity="0" rgba="0.08 0.08 0.08 1"/>
     <camera name="external" quat="0.756283 0.423207 -0.243643 -0.435397" pos="-0.31 -0.16 0.702" fovy="42"/>
-    <camera name="top" quat="0.987569 0.106489 0.114949 -0.0123948" pos="0.16 -0.152 1.12" fovy="40"/>
-    <light pos="0.8 -0.8 2.2" dir="-0.276172 0.276172 -0.920575" diffuse="0.85 0.82 0.75"/>
-    <light castshadow="false" pos="-1.2 1 1.8" dir="0.421076 -0.336861 -0.842152" diffuse="0.35 0.36 0.4"/>
+    <camera name="top" quat="0.987569 0.106489 0.114949 -0.0123948" pos="0.16 -0.152 1.12" fovy="24"/>
+    <light name="key" pos="0.662814 -0.662814 2.60938" dir="-0.276172 0.276172 -0.920575" diffuse="0.85 0.82 0.75"/>
+    <light name="fill" castshadow="false" pos="-1.2 1 1.8" dir="0.421076 -0.336861 -0.842152" diffuse="0.35 0.36 0.4"/>
     <body name="white_pawn1" pos="0.0979905 -0.0699973 0.455509" quat="1 8.47516e-07 3.34789e-05 -5.34451e-07">
       <joint name="white_pawn1_joint" type="free"/>
       <geom type="mesh" contype="0" conaffinity="0" density="0" material="mat_white_pawn" mesh="mesh_white_pawn"/>

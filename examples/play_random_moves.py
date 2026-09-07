@@ -37,10 +37,11 @@ def random_position(rng: random.Random, extra_pieces: int) -> chess.Board:
 
 
 def describe(board: chess.Board, move: chess.Move) -> str:
-    piece = board.piece_at(move.from_square)
-    color = "white" if piece.color else "black"
-    return (f"move the {color} {chess.piece_name(piece.piece_type)} "
-            f"from {chess.square_name(move.from_square)} to {chess.square_name(move.to_square)}")
+    """The instruction given to a policy: purely spatial, so executing it needs
+    no chess knowledge and no piece-type recognition. Which move to play is the
+    caller's business (a sampler here, an engine in a real game)."""
+    return (f"pick up the piece on {chess.square_name(move.from_square)} "
+            f"and place it on {chess.square_name(move.to_square)}")
 
 
 def run(moves: int, seed: int = 0, record: str | None = None, randomize: bool = False) -> int:
