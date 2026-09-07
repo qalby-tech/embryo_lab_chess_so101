@@ -19,7 +19,7 @@ chess_sim/                 the framework package
   reach.py                 which squares/moves the expert can execute
   env.py                   ChessSimEnv — the public API
   recorder.py              EpisodeRecorder — LeRobot-style episode files
-examples/                  play_random_moves.py, play_opening.py, collect_dataset.py, calibrate_reach.py
+examples/                  play_game.py, play_random_moves.py, collect_dataset.py, calibrate_reach.py
 ```
 
 ## Quick start
@@ -27,6 +27,7 @@ examples/                  play_random_moves.py, play_opening.py, collect_datase
 ```bash
 source ~/miniforge3/etc/profile.d/conda.sh && conda activate embodiedgen
 export MUJOCO_GL=egl PYTHONPATH=~/chess_so101
+python examples/play_game.py            # 20-ply game from the initial position, video from both cameras
 python examples/play_random_moves.py --moves 5
 ```
 
@@ -39,7 +40,7 @@ result = env.move("g1", "f3")           # scripted expert: MoveResult(success, p
 print(env.board.fen())                  # python-chess mirror of the physical board
 
 obs = env.step(action)                  # or drive the 6 joints yourself (radians, 30 Hz)
-frame = env.render("top")               # 'external' or 'top' camera
+frame = env.render("top")               # 'top': overhead camera on the mast; 'external': side view
 env.export_xml("scene.xml")             # standalone MuJoCo XML of the scene
 ```
 
@@ -73,10 +74,17 @@ the current position with clearance for the jaws.
 - **Fixed topology.** All 32 pieces always exist as free bodies; `reset(fen)`
   moves them onto squares or into off-board graveyard slots. One compiled model
   serves every episode, and the scene exports as a plain XML.
-- **Mini board.** 2.8 cm squares, arm on a 14 cm riser 4 cm from the edge: the
-  SO-101 reaches every square; the sampler further restricts moves to squares
-  it can grasp within a 30° tool tilt and with measured tracking accuracy
-  (`examples/calibrate_reach.py` regenerates that map).
+- **Mini board.** 2.8 cm squares, arm on a 6 cm riser 8 cm from the edge: the
+  SO-101 reaches all 64 squares with the tool vertical, and the servos track
+  every square center within 3 mm (`examples/calibrate_reach.py` measures
+  that map; the sampler excludes squares over 5 mm or inside the near field).
+  Closer mounts lose the arm's own back ranks: 4 cm from the edge the servos
+  cannot track ranks 1–3 at all, so no game from the initial position.
+- **Cameras.** `top` is a workspace camera mounted as on the real rig: a
+  plate under the arm base carries a 60 cm square-tube mast beside the arm
+  with the camera on top, looking down at the board (`scene.MAST_*`); the
+  image is upright along the files, white at the bottom. `external` is a
+  fixed side view. Both are plain MuJoCo cameras in the exported XML.
 - **Piece colliders** are profiled stacks of cylinders sampled from the mesh
   (flat base for stable settling, true radii above it). Generated convex hulls
   rest on a rounded nub and creep across the board.
@@ -122,11 +130,15 @@ the current position with clearance for the jaws.
   on the current roll branch avoids a wrist flip mid-carry), and a span past
   the limit is realized as far as possible instead of bending the arm to
   serve it.
-- **Crowding limit.** On a fully populated opening position the ~5 mm prongs
-  have only ~2 mm of corridor between 28 mm squares, and the roll joint cannot
-  reach a full 180°; expect occasional neighbor contact there. Sparse and
-  moderately crowded positions execute reliably: 50/50 random moves over five
-  seeds of `examples/play_random_moves.py` at 0.2–4.2 mm placement, and a
-  5-move ladder mate 5/5. A larger square pitch trades reach for clearance.
+- **Crowding.** On a fully populated board the ~5 mm prongs have only ~2 mm
+  of corridor between 28 mm squares, so the jaw-span selection matters;
+  `env.executable_moves()` is deliberately conservative there (it admits
+  only two moves from the initial position), while `env.move()` executes any
+  quiet move you ask for. Measured with the physical grasp: 30/30 random
+  sparse-board moves over three seeds of `examples/play_random_moves.py` at
+  0.0–4.6 mm placement, a 5-move ladder mate 5/5, and the 20-ply Giuoco
+  Pianissimo of `examples/play_game.py` from the initial position (see the
+  script's docstring for the result). A larger square pitch trades reach for
+  clearance.
 - Captures, castling, promotion and en passant are not executed by the expert
   yet; the graveyard slots make captures a small follow-up.

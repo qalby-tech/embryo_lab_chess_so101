@@ -48,19 +48,20 @@ def piece_slots(board: BoardSpec) -> list[PieceSlot]:
     return slots
 
 
-def _lookat_xyaxes(pos, target):
-    """Camera x/y axes (MuJoCo convention: -z is the view direction)."""
+def _lookat_xyaxes(pos, target, up=(0.0, 0.0, 1.0)):
+    """Camera x/y axes (MuJoCo convention: -z is the view direction); `up` is
+    the world direction that should point up in the image."""
     forward = np.asarray(target, float) - np.asarray(pos, float)
     forward /= np.linalg.norm(forward)
-    right = np.cross(forward, [0.0, 0.0, 1.0])
+    right = np.cross(forward, np.asarray(up, float))
     right /= np.linalg.norm(right)
     up = np.cross(right, forward)
     return np.concatenate([right, up])
 
 
-def _add_camera(spec, name, pos, target, fovy=42):
+def _add_camera(spec, name, pos, target, fovy=42, up=(0.0, 0.0, 1.0)):
     spec.worldbody.add_camera(name=name, pos=list(pos),
-                              xyaxes=list(_lookat_xyaxes(pos, target)), fovy=fovy)
+                              xyaxes=list(_lookat_xyaxes(pos, target, up)), fovy=fovy)
 
 
 def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
@@ -84,10 +85,43 @@ def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
     _add_board(spec, board)
     _add_pieces(spec, board)
     _add_arm(spec, board)
+    camera_pos = _add_camera_mast(spec, board)
 
     _add_camera(spec, "external", (-0.31, -0.16, board.top + 0.26), (0.0, 0.02, board.top + 0.04))
-    _add_camera(spec, "top", (0.0, 0.0, board.top + 0.36), (0.0, 0.0001, board.top), fovy=50)
+    # the overhead image is upright along the files: white at the bottom
+    _add_camera(spec, "top", camera_pos, (0.0, 0.0, board.top), fovy=48, up=(0.0, 1.0, 0.0))
     return spec
+
+
+MAST_SIDE = 0.16      # mast axis this far beside the arm axis (+x: the arm's right)
+MAST_HEIGHT = 0.60    # pole height above the base plate
+MAST_WIDTH = 0.03     # square-tube side
+
+
+def _add_camera_mast(spec, board) -> tuple[float, float, float]:
+    """Overhead-camera mast as on the real rig: a plate under the arm base
+    carries a square tube beside the arm with the workspace camera on top,
+    pointed down at the board. Returns the camera position."""
+    ax, ay, az = board.arm_base
+    plate = 0.010
+    spec.worldbody.add_geom(name="mast_plate", type=mujoco.mjtGeom.mjGEOM_BOX,
+                            size=[0.5 * MAST_SIDE + 0.06, 0.07, plate / 2],
+                            pos=[ax + 0.5 * MAST_SIDE, ay, az + plate / 2],
+                            rgba=[0.78, 0.86, 0.20, 1])
+    mx, lower = ax + MAST_SIDE, 0.20
+    spec.worldbody.add_geom(name="mast_lower", type=mujoco.mjtGeom.mjGEOM_BOX,
+                            size=[MAST_WIDTH / 2, MAST_WIDTH / 2, lower / 2],
+                            pos=[mx, ay, az + plate + lower / 2], rgba=[0.78, 0.86, 0.20, 1])
+    spec.worldbody.add_geom(name="mast_upper", type=mujoco.mjtGeom.mjGEOM_BOX,
+                            size=[MAST_WIDTH / 2, MAST_WIDTH / 2, (MAST_HEIGHT - lower) / 2],
+                            pos=[mx, ay, az + plate + lower + (MAST_HEIGHT - lower) / 2],
+                            rgba=[0.08, 0.08, 0.08, 1])
+    cam_z = az + plate + MAST_HEIGHT + 0.02
+    housing = (0.015, 0.03, 0.02)
+    spec.worldbody.add_geom(name="mast_camera", type=mujoco.mjtGeom.mjGEOM_BOX,
+                            size=list(housing), pos=[mx, ay + 0.02, cam_z],
+                            rgba=[0.08, 0.08, 0.08, 1], contype=0, conaffinity=0)
+    return (mx, ay + 0.02 + housing[1] + 0.005, cam_z)   # lens just ahead of the housing
 
 
 def _add_environment(spec, board):

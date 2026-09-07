@@ -104,10 +104,14 @@
     <geom size="6 6 0.1" type="plane" rgba="0.5 0.42 0.34 1"/>
     <geom type="mesh" contype="0" conaffinity="0" group="1" material="backdrop_mat" mesh="backdrop"/>
     <geom size="0.36 0.3 0.215" pos="0 0 0.215" type="box" rgba="0.42 0.28 0.17 1"/>
-    <geom size="0.055 0.055 0.07" pos="0 -0.167 0.5" type="box" rgba="0.25 0.25 0.28 1"/>
+    <geom size="0.055 0.055 0.03" pos="0 -0.207 0.46" type="box" rgba="0.25 0.25 0.28 1"/>
     <geom name="board" size="0.127 0.127 0.006" pos="0 0 0.436" type="box" material="board_mat"/>
+    <geom name="mast_plate" size="0.14 0.07 0.005" pos="0.08 -0.207 0.495" type="box" rgba="0.78 0.86 0.2 1"/>
+    <geom name="mast_lower" size="0.015 0.015 0.1" pos="0.16 -0.207 0.6" type="box" rgba="0.78 0.86 0.2 1"/>
+    <geom name="mast_upper" size="0.015 0.015 0.2" pos="0.16 -0.207 0.9" type="box" rgba="0.08 0.08 0.08 1"/>
+    <geom name="mast_camera" size="0.015 0.03 0.02" pos="0.16 -0.187 1.12" type="box" contype="0" conaffinity="0" rgba="0.08 0.08 0.08 1"/>
     <camera name="external" quat="0.756283 0.423207 -0.243643 -0.435397" pos="-0.31 -0.16 0.702" fovy="42"/>
-    <camera name="top" quat="1 0.000138889 0 0" pos="0 0 0.802" fovy="50"/>
+    <camera name="top" quat="0.987569 0.106489 0.114949 -0.0123948" pos="0.16 -0.152 1.12" fovy="48"/>
     <light pos="0.8 -0.8 2.2" dir="-0.276172 0.276172 -0.920575" diffuse="0.85 0.82 0.75"/>
     <light castshadow="false" pos="-1.2 1 1.8" dir="0.421076 -0.336861 -0.842152" diffuse="0.35 0.36 0.4"/>
     <body name="white_pawn1" pos="0.187 -0.112 0.443598">
@@ -366,7 +370,7 @@
       <geom size="0.00389267 0.00445674" pos="-7.7993e-06 -2.31751e-05 0.00222392" type="cylinder" rgba="1 1 1 0" density="600"/>
       <geom size="0.00700516 0.0077993" pos="-7.7993e-06 -2.31751e-05 0.01448" type="cylinder" rgba="1 1 1 0" density="600"/>
     </body>
-    <body name="so101:base" childclass="so101:so101_new_calib" pos="0 -0.167 0.57" quat="0.707107 0 0 0.707107">
+    <body name="so101:base" childclass="so101:so101_new_calib" pos="0 -0.207 0.49" quat="0.707107 0 0 0.707107">
       <inertial pos="0.0137179 -5.19711e-05 0.0334843" quat="0.420519 0.558762 0.57198 0.428704" mass="0.147" diaginertia="0.000136127 0.000131807 0.000113233"/>
       <geom class="so101:visual" pos="-0.00636471 -9.94414e-05 -0.0024" quat="0.5 0.5 0.5 0.5" material="so101:base_motor_holder_so101_v1_material" mesh="so101:base_motor_holder_so101_v1"/>
       <geom class="so101:visual" pos="-0.00636471 -8.97657e-09 -0.0024" quat="0.5 0.5 0.5 0.5" material="so101:base_so101_v2_material" mesh="so101:base_so101_v2"/>

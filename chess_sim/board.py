@@ -18,12 +18,12 @@ FILES = "abcdefgh"
 class BoardSpec:
     """Physical layout of the board and the arm mount, in meters."""
 
-    square: float = 0.028          # square edge (mini set: SO-101 reach is ~30 cm)
+    square: float = 0.028          # square edge (mini set: SO-101 reach is ~33 cm)
     border: float = 0.015          # wood border around the 8x8 field
     thickness: float = 0.012       # board slab thickness
     table_top: float = 0.43        # table height above the floor
-    arm_gap: float = 0.04          # distance from board edge to arm base center
-    arm_riser: float = 0.14        # pedestal height under the arm base
+    arm_gap: float = 0.08          # distance from board edge to arm base center
+    arm_riser: float = 0.06        # pedestal height under the arm base
 
     @property
     def field(self) -> float:

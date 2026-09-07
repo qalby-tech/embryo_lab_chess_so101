@@ -22,7 +22,7 @@ EXECUTED_REACH_FILE = os.path.join(CALIB_DIR, "executed_reach.json")
 MAX_TILT = np.radians(30)
 MAX_IK_ERROR = 0.008
 MAX_EXECUTED_ERROR = 0.005
-NEAR_FIELD_RADIUS = 0.14
+NEAR_FIELD_RADIUS = 0.10
 
 
 def load_executed_reach(path: str = EXECUTED_REACH_FILE) -> dict[int, float]:
