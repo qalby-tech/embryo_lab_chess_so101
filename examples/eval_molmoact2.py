@@ -40,7 +40,7 @@ def observation(env: ChessSimEnv, instruction: str, device: str) -> dict:
     return batch
 
 
-def run_episode(env, policy, rng, max_steps: int, device: str, on_step=None) -> dict:
+def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None) -> dict:
     """One instructed move under policy control; returns the outcome."""
     while True:
         board = random_position(rng, rng.randint(2, 8))
@@ -54,10 +54,12 @@ def run_episode(env, policy, rng, max_steps: int, device: str, on_step=None) -> 
     before = {sq: env.piece_position(sl)[:2].copy() for sq, sl in env._square_slot.items()}
     target = np.array(env.board_spec.square_center(move.to_square))
 
+    preprocess, postprocess = processors
     policy.reset()
     for _ in range(max_steps):
         with torch.inference_mode():
-            action = policy.select_action(observation(env, instruction, device))
+            batch = preprocess(observation(env, instruction, device))
+            action = postprocess(policy.select_action(batch))
         env.apply_action(to_radians(action[0].float().cpu().numpy()), on_step)
 
     position = env.piece_position(slot)
@@ -81,9 +83,13 @@ def main():
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
 
+    from lerobot.policies import make_pre_post_processors
     from lerobot.policies.molmoact2.modeling_molmoact2 import MolmoAct2Policy
 
     policy = MolmoAct2Policy.from_pretrained(args.checkpoint).to(args.device).eval()
+    # the checkpoint carries its own normalization pipelines; the policy sees
+    # normalized inputs and returns actions in dataset units through them
+    processors = make_pre_post_processors(policy_cfg=policy.config, pretrained_path=args.checkpoint)
     env = ChessSimEnv(cameras=tuple(CAMERAS) + ("external",), image_size=(640, 480))
     writer = None
     if args.video:
@@ -97,7 +103,7 @@ def main():
     rng = random.Random(args.seed)
     successes, errors = 0, []
     for i in range(args.episodes):
-        outcome = run_episode(env, policy, rng, args.max_steps, args.device, record)
+        outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device, record)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         print(f"[{i}] {outcome['instruction']}: {'OK' if outcome['success'] else 'FAIL'} "

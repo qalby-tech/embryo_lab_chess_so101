@@ -16,3 +16,6 @@ CLAUDE.md
 
 # per-appearance generated textures
 chess_sim/assets/scene/generated/
+
+# training runs and checkpoints
+outputs/
