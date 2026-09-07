@@ -38,6 +38,8 @@ accelerate launch --num_processes=1 --mixed_precision=bf16 -m lerobot.scripts.le
     --policy.image_keys='["observation.images.top","observation.images.wrist"]' \
     --policy.gradient_checkpointing=true \
     --policy.normalize_gripper=true \
+    --policy.push_to_hub=false \
+    --wandb.enable=false \
     --batch_size="$BATCH" \
     --steps="$STEPS" \
     --save_freq=1000 \

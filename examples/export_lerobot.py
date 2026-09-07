@@ -26,6 +26,7 @@ import os
 import imageio.v2 as imageio
 import numpy as np
 
+from lerobot.configs.video import VideoEncoderConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
@@ -57,6 +58,13 @@ def main():
     ap.add_argument("--convention", choices=["so101", "radians"], default="so101")
     ap.add_argument("--max-episodes", type=int, default=None)
     ap.add_argument("--keep-failures", action="store_true", help="also export unsuccessful moves")
+    # LeRobot's default (libsvtav1, staged PNGs) encodes at about a minute per
+    # episode here; h264 with streaming encoding is ~20x faster and the frames
+    # are re-encoded from h264 recordings anyway.
+    ap.add_argument("--vcodec", default="h264",
+                    choices=["h264", "h264_nvenc", "hevc", "libsvtav1", "auto"])
+    ap.add_argument("--crf", type=int, default=23)
+    ap.add_argument("--encoder-threads", type=int, default=4)
     args = ap.parse_args()
 
     convert = to_so101_degrees if args.convention == "so101" else (lambda v: v)
@@ -78,8 +86,10 @@ def main():
         features[f"observation.images.{cam}"] = {
             "dtype": "video", "shape": (height, width, 3), "names": ["height", "width", "channels"]}
 
-    dataset = LeRobotDataset.create(repo_id=args.repo_id, fps=fps, features=features,
-                                    root=args.root, robot_type="so101")
+    dataset = LeRobotDataset.create(
+        repo_id=args.repo_id, fps=fps, features=features, root=args.root, robot_type="so101",
+        rgb_encoder=VideoEncoderConfig(vcodec=args.vcodec, crf=args.crf, g=2, pix_fmt="yuv420p"),
+        streaming_encoding=True, encoder_threads=args.encoder_threads)
     exported = skipped = 0
     for path in sources:
         if args.max_episodes is not None and exported >= args.max_episodes:

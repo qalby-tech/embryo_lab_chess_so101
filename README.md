@@ -80,6 +80,47 @@ the arm's position servos track IK joint targets under gravity and contact.
 `env.executable_moves()` lists the quiet legal moves the arm can perform in
 the current position with clearance for the jaws.
 
+## Varying the scene
+
+`Appearance` holds everything about how the scene looks: `piece_scale`
+(0.7–1.1 of the standard size), a colour tint per piece colour, the light and
+dark square colours, the border, the table, and the key light's brightness and
+direction. Pass one to the environment, or draw one at random:
+
+```python
+from chess_sim import Appearance, ChessSimEnv
+env = ChessSimEnv(appearance=Appearance(piece_scale=1.1, white_rgba=(0.95, 0.9, 0.75, 1)))
+env = ChessSimEnv(appearance=Appearance.random(np.random.default_rng(3)))
+env.recolor(Appearance.random(rng))   # colours and lights only, no recompile
+```
+
+Piece size and the board texture are baked into the compiled scene, so
+changing them rebuilds it (~1 s); colours and lighting can change on a live
+scene. `examples/collect_dataset.py --randomize` uses both: a new look every
+episode, a rebuild every five.
+
+## Training a VLA on it
+
+```bash
+# 1. record episodes in parallel, each with a different look   (~6 s/episode, 4 workers)
+python examples/collect_dataset.py --episodes 600 --workers 4 --randomize --out datasets/chess_vla
+
+# 2. convert to a LeRobot v3.0 dataset                          (in the VLA env, ~3 s/episode)
+python examples/export_lerobot.py --in datasets/chess_vla \
+    --repo-id local/chess_so101 --root datasets/lerobot/chess_so101
+
+# 3. fine-tune MolmoAct2 from the SO-100/101 checkpoint         (one GPU)
+examples/train_molmoact2.sh datasets/lerobot/chess_so101 outputs/molmoact2_chess
+
+# 4. score it closed-loop against the expert's own success rule
+python examples/eval_molmoact2.py --checkpoint outputs/molmoact2_chess/checkpoints/last/pretrained_model
+```
+
+Steps 2–4 need a separate environment: `lerobot` requires Python 3.12 and its
+MolmoAct2 support only exists on git main, while the simulator runs on the
+3.10 environment above. Point `PYTHONPATH` at this repo so the evaluation can
+import `chess_sim`.
+
 ## Design notes
 
 - **Fixed topology.** All 32 pieces always exist as free bodies; `reset(fen)`
