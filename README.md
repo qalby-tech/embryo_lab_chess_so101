@@ -27,6 +27,7 @@ examples/                  play_game.py, play_random_moves.py, collect_dataset.p
 ```bash
 source ~/miniforge3/etc/profile.d/conda.sh && conda activate embodiedgen
 export MUJOCO_GL=egl PYTHONPATH=~/chess_so101
+export GALLIUM_DRIVER=d3d12   # WSL2: render on the GPU (see below); harmless elsewhere
 python examples/play_game.py            # 20-ply game from the initial position, side-view video
 python examples/play_game.py --cameras external top wrist   # all three views side by side
 python examples/play_random_moves.py --moves 5
@@ -100,6 +101,12 @@ the current position with clearance for the jaws.
   `external` is a fixed side view for demos and debugging; `ChessSimEnv`
   renders the robot cameras by default and `EpisodeRecorder` refuses an env
   without them. All three are plain MuJoCo cameras in the exported XML.
+- **Rendering on WSL2.** MuJoCo's EGL backend picks Mesa's `llvmpipe` there, so
+  every frame is rasterized on the CPU at ~300 ms. `GALLIUM_DRIVER=d3d12` routes
+  it through WSL's D3D12 layer onto the real GPU: 22 ms per 640x480 frame with
+  shadows, 12 ms without. Recording a 216-step episode from both robot cameras
+  drops from ~2 minutes to ~16 seconds. NVIDIA's own EGL vendor library cannot
+  be used (no `PLATFORM_DEVICE` support under WSL).
 - **Piece colliders** are profiled stacks of cylinders sampled from the mesh
   (flat base for stable settling, true radii above it). Generated convex hulls
   rest on a rounded nub and creep across the board.
