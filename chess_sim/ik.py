@@ -5,7 +5,8 @@ model (see `scene.build_arm`): a tool point (an offset from the `gripperframe`
 site, e.g. the pinch pocket) is driven to a world position while the approach
 axis (site +x) is kept close to vertical, the jaw-span axis (site +z) is turned
 toward a requested horizontal direction by the wrist roll alone, and a weak
-posture term regularizes the remaining redundancy. Joint limits are hard
+posture term regularizes the remaining redundancy. Joint limits, a step bound
+and self-collision avoidance between the hand and the arm's links are hard
 inequality constraints of each QP.
 """
 from __future__ import annotations
@@ -32,6 +33,15 @@ DAMPING = 1e-6         # Levenberg-Marquardt damping on every QP
 STEP_LIMIT = 0.5       # radians per joint per iteration: bounds the Gauss-Newton step
                        # through singular poses (the zero pose is a straight vertical stack)
 ROLL_STAY = np.pi / 2  # a roll branch that moves less than this keeps the "no wrist twist" bonus
+ROLL_MARGIN = 0.15     # radians kept between planned roll angles and the joint limits
+# self-collision avoidance: the hand must keep clear of the shoulder and upper
+# arm (a tight fold over the near squares otherwise drives the gripper into the
+# shoulder). The lower arm is left out: at full wrist flex, needed for the far
+# corners, the hand legitimately sits within millimeters of it.
+HAND_BODIES = ("gripper", "moving_jaw_so101_v1")
+ARM_BODIES = ("shoulder", "upper_arm")
+COLLISION_MARGIN = 0.005   # meters kept between hand and arm geoms
+COLLISION_DETECT = 0.03    # meters at which the avoidance constraint activates
 SOLVER = "daqp"
 
 
@@ -115,8 +125,13 @@ class So101Ik:
         self._arm_site = arm_site
         self._arm_qpos = np.array([arm_model.jnt_qposadr[j] for j in arm_joints])
         self._arm_dof = np.array([arm_model.jnt_dofadr[j] for j in arm_joints])
-        self.lower = arm_model.jnt_range[arm_joints, 0]
-        self.upper = arm_model.jnt_range[arm_joints, 1]
+        # plan the roll a little inside its range: a target exactly on the joint
+        # limit is one the position servo cannot settle on, and a span in the
+        # roll's unreachable arc would otherwise be planned right onto the limit
+        arm_model.jnt_range[arm_joints[4], 0] += ROLL_MARGIN
+        arm_model.jnt_range[arm_joints[4], 1] -= ROLL_MARGIN
+        self.lower = arm_model.jnt_range[arm_joints, 0].copy()
+        self.upper = arm_model.jnt_range[arm_joints, 1].copy()
 
         self._point = _PointTask(arm_model, arm_site, POSITION_COST)
         self._tilt = mink.AxisAlignTask(arm_site, "site", axis=(1.0, 0.0, 0.0),
@@ -131,8 +146,13 @@ class So101Ik:
         q_rest = self.configuration.q
         q_rest[self._arm_qpos] = rest
         self._posture.set_target(q_rest)
+        hand = [g for b in HAND_BODIES for g in mink.get_body_geom_ids(arm_model, arm_model.body(prefix + b).id)]
+        arm = [g for b in ARM_BODIES for g in mink.get_body_geom_ids(arm_model, arm_model.body(prefix + b).id)]
         self._limits = [mink.ConfigurationLimit(arm_model),
-                        mink.VelocityLimit(arm_model, {prefix + n: STEP_LIMIT for n in ARM_JOINTS})]
+                        mink.VelocityLimit(arm_model, {prefix + n: STEP_LIMIT for n in ARM_JOINTS}),
+                        mink.CollisionAvoidanceLimit(arm_model, [(hand, arm)],
+                                                     minimum_distance_from_collisions=COLLISION_MARGIN,
+                                                     collision_detection_distance=COLLISION_DETECT)]
 
     # -- kinematics helpers -------------------------------------------------
 

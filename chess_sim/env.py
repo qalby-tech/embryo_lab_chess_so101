@@ -18,9 +18,9 @@ import numpy as np
 from .appearance import Appearance
 from .assets import piece_asset_name
 from .board import START_FEN, BoardSpec, parse_square
-from .controller import PickPlaceController
+from .controller import PickPlaceController, grasp_plan
 from .ik import So101Ik
-from .reach import ReachMap
+from .reach import MAX_IK_ERROR, MAX_TILT, ReachMap
 from .scene import (ARM_PREFIX, KEY_LIGHT_DIFFUSE, ROBOT_CAMERAS, PieceSlot, arm_rest_pose, build_arm,
                     build_scene, export_xml, piece_slots)
 
@@ -235,8 +235,9 @@ class ChessSimEnv:
     def _current_action(self) -> np.ndarray:
         return np.array([self.data.ctrl[a] for a in self._actuators])
 
-    def jaw_clearance(self, xy, exclude: PieceSlot | None = None):
-        """Best jaw-span direction at `xy` and its clearance margin (meters).
+    def jaw_clearance(self, xy, direction=None, exclude: PieceSlot | None = None):
+        """Clearance margin (meters) of a jaw-span `direction` at `xy`, or of
+        the best direction as (direction, margin) when none is given.
 
         The moving jaw opens toward +direction and needs ~MOVING_JAW_ROOM of
         free space past the piece; the fixed prong sits on -direction and needs
@@ -247,35 +248,53 @@ class ChessSimEnv:
                   for sl in self._square_slot.values() if sl is not exclude]
         lane = 0.75 * self.board_spec.square
 
-        def room(direction):
-            """Free distance along `direction` to the nearest piece surface."""
+        def room(d):
+            """Free distance along `d` to the nearest piece surface."""
             best = 0.30
             for rel, radius in others:
-                along, across = np.dot(rel, direction), float(np.cross(direction, rel))
+                along, across = np.dot(rel, d), float(np.cross(d, rel))
                 if along > 0 and abs(across) < lane:
                     best = min(best, along - radius)
             return best
 
-        best_dir, best_margin = None, -1.0
-        for d in SPAN_DIRECTIONS:
-            margin = min(room(d) - MOVING_JAW_ROOM, room(-d) - FIXED_PRONG_ROOM)
-            if margin > best_margin:
-                best_dir, best_margin = d, margin
-        return best_dir, float(best_margin)
+        def margin(d):
+            return float(min(room(d) - MOVING_JAW_ROOM, room(-d) - FIXED_PRONG_ROOM))
 
-    def free_span_direction(self, xy, exclude: PieceSlot | None = None) -> np.ndarray:
-        return self.jaw_clearance(xy, exclude)[0]
+        if direction is not None:
+            return margin(np.asarray(direction, dtype=float))
+        return max(((d, margin(d)) for d in SPAN_DIRECTIONS), key=lambda o: o[1])
+
+    def span_options(self, xy, exclude: PieceSlot | None = None):
+        """All four jaw-span directions at `xy` with their clearance margins,
+        best first."""
+        return sorted(((d, self.jaw_clearance(xy, d, exclude)) for d in SPAN_DIRECTIONS),
+                      key=lambda o: -o[1])
+
+    def grasp_span(self, point, offset, exclude: PieceSlot | None = None) -> np.ndarray | None:
+        """Jaw-span direction to work at world `point` (tool point `offset`):
+        the direction with the most clearance that the arm can realize with the
+        tool near vertical and without folding into itself. None when no
+        direction has both clearance and a solution."""
+        for direction, margin in self.span_options(point[:2], exclude):
+            if margin < 0:
+                break
+            res = self.ik.solve(self.data, point, offset=offset, span=direction)
+            if res.position_error <= MAX_IK_ERROR and res.tilt <= MAX_TILT:
+                return direction
+        return None
 
     def executable_moves(self) -> list[chess.Move]:
-        """Quiet legal moves the expert can execute here without touching
-        neighbors: reachable endpoints with adequate jaw clearance at both."""
+        """Quiet legal moves the expert can execute here: reachable endpoints
+        where some jaw span has clearance from the neighbors and a
+        collision-free arm solution."""
         moves = []
         for mv in self.reach.executable_moves(self.board):
             slot = self._square_slot[mv.from_square]
-            src_xy = self.board_spec.square_center(mv.from_square)
-            dst_xy = self.board_spec.square_center(mv.to_square)
-            if (self.jaw_clearance(src_xy, exclude=slot)[1] >= 0
-                    and self.jaw_clearance(dst_xy, exclude=slot)[1] >= 0):
+            plan = grasp_plan(slot.geometry, self.board_spec)
+            src = np.array([*self.board_spec.square_center(mv.from_square), plan.z_grasp])
+            dst = np.array([*self.board_spec.square_center(mv.to_square), plan.z_grasp])
+            if (self.grasp_span(src, plan.off_open, exclude=slot) is not None
+                    and self.grasp_span(dst, plan.off_hold, exclude=slot) is not None):
                 moves.append(mv)
         return moves
 

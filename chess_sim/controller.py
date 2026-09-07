@@ -10,6 +10,7 @@ live before placement.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
@@ -28,12 +29,46 @@ SERVO_ROUND_STEPS = 8
 SETTLE_STEPS = 12            # control steps holding the closed jaws before lifting
 
 
+@dataclass(frozen=True)
+class GraspPlan:
+    """How a piece is held: pocket height above the board, jaw gaps and the
+    pocket offsets (site frame) for the open and the holding jaws."""
+
+    z_grasp: float
+    gap_open: float
+    gap_hold: float
+    off_open: np.ndarray
+    off_hold: np.ndarray
+
+
+def grasp_plan(geometry, board) -> GraspPlan:
+    g = geometry
+    # Pocket height: the piece's grasp height, unless the fingertips would
+    # touch the board or the pads would reach down into a wider segment
+    # below the one they clamp (a rook's base flange).
+    z_grasp = board.top + max(g.waist,
+                              gripper.TIP_CLEARANCE + gripper.TIP_X - gripper.POCKET_X,
+                              g.flange_top + gripper.PAD_REACH)
+    # Open prongs must clear everything the pads span vertically on the way
+    # in and out (a rook's base flange as much as a king's crown), so they
+    # are positioned around the widest radius in that band; the hold gap
+    # closes SQUEEZE past the grasp radius so the pads clamp the piece.
+    pad_lo = z_grasp - board.top - gripper.PAD_REACH
+    pad_hi = z_grasp - board.top + gripper.PAD_REACH
+    clear = g.radius_between(pad_lo, pad_hi) + 0.003
+    # while the jaws are open, keep the piece as close to the FIXED prong as
+    # the widest radius in the pad band allows: the moving jaw opens toward
+    # the free side, so the opening slack goes there rather than into an
+    # occupied neighbor square
+    gap_hold = 2 * g.grasp_radius - gripper.SQUEEZE
+    return GraspPlan(z_grasp=z_grasp, gap_open=2 * clear + 0.010, gap_hold=gap_hold,
+                     off_open=gripper.pocket_offset(2 * clear), off_hold=gripper.pocket_offset(gap_hold))
+
+
 class PickPlaceController:
     def __init__(self, env):
         self.env = env
         self._span = None            # preferred jaw-span direction for the current phase
-        self._span_grasp = None
-        self._span_place = None
 
     # -- public --------------------------------------------------------------
 
@@ -43,38 +78,18 @@ class PickPlaceController:
         waypoints executed within tolerance (final outcome is verified by env)."""
         env, board, g = self.env, self.env.board_spec, slot.geometry
         px, py, _ = env.piece_position(slot)
-        self._span_grasp = env.free_span_direction((px, py), exclude=slot)
-        self._span_place = env.free_span_direction(target_xy, exclude=slot)
-        # Pocket height: the piece's grasp height, unless the fingertips would
-        # touch the board or the pads would reach down into a wider segment
-        # below the one they clamp (a rook's base flange).
-        z_grasp = board.top + max(g.waist,
-                                  gripper.TIP_CLEARANCE + gripper.TIP_X - gripper.POCKET_X,
-                                  g.flange_top + gripper.PAD_REACH)
-        # Open prongs must clear everything the pads span vertically on the way
-        # in and out (a rook's base flange as much as a king's crown), so they
-        # are positioned around the widest radius in that band; the hold gap
-        # closes SQUEEZE past the grasp radius so the pads clamp the piece.
-        pad_lo = z_grasp - board.top - gripper.PAD_REACH
-        pad_hi = z_grasp - board.top + gripper.PAD_REACH
-        clear = g.radius_between(pad_lo, pad_hi) + 0.003
-        gap_open = 2 * clear + 0.010
-        gap_hold = 2 * g.grasp_radius - gripper.SQUEEZE
-        gap_release = gap_open
-        ok = True
-
+        plan = grasp_plan(g, board)
+        z_grasp, gap_open, gap_hold = plan.z_grasp, plan.gap_open, plan.gap_hold
+        off_open, off_hold = plan.off_open, plan.off_hold
+        gap_release, off_release = gap_open, off_open
         grasp_pt = np.array([px, py, z_grasp])
         place_pt = np.array([target_xy[0], target_xy[1], z_grasp])
-        off_hold = gripper.pocket_offset(gap_hold)
-        # while the jaws are open, keep the piece as close to the FIXED prong as
-        # the widest radius in the pad band allows: the moving jaw opens toward
-        # the free side, so the opening slack goes there rather than into an
-        # occupied neighbor square
-        off_open = gripper.pocket_offset(2 * clear)
-        off_release = off_open
+        span_grasp = env.grasp_span(grasp_pt, off_open, exclude=slot)
+        span_place = env.grasp_span(place_pt, off_hold, exclude=slot)
+        ok = True
 
         # approach the piece along the tool axis, close, let the clamp build
-        self._span = self._span_grasp
+        self._span = span_grasp
         self._go(np.array([px, py, board.top + TRANSIT]), gap_open, off_open, 22, on_step)
         approach = self._approach_axis(grasp_pt, off_open)
         self._go(grasp_pt - approach * APPROACH_LENGTH, gap_open, off_open, 14, on_step)
@@ -93,16 +108,17 @@ class PickPlaceController:
         self._line(above_src, above_dst, gap_hold, off_hold, on_step,
                    segments=max(2, int(np.linalg.norm(above_dst - above_src) / 0.03)), steps=8)
 
-        # the piece sits wherever the pads caught it: measure the offset between
-        # its axis and the pocket so the PIECE lands centered on the square
+        # turn to the placing span above the target (the roll may swing the
+        # held piece around the tool axis), then measure where the piece sits
+        # relative to the pocket so the PIECE lands centered on the square
+        self._span = span_place
+        approach = self._approach_axis(place_pt, off_hold)
+        self._go(place_pt - approach * APPROACH_LENGTH, gap_hold, off_hold, 14, on_step)
         pocket, _ = env.ik.tool_pose(env.data, off_hold)
         axis = env.piece_position(slot)[:2] + g.center[:2]
         place_pt[:2] -= axis - pocket[:2]
 
         # set down along the tool axis, release, retreat
-        self._span = self._span_place
-        approach = self._approach_axis(place_pt, off_hold)
-        self._go(place_pt - approach * APPROACH_LENGTH, gap_hold, off_hold, 14, on_step)
         ok &= self._descend(place_pt, gap_hold, off_hold, approach, on_step)
         # open the jaws, then shift the tool so the piece sits centered between
         # the open prongs (the wider gap's pocket lies further from the fixed

@@ -137,9 +137,13 @@ the current position with clearance for the jaws.
   vertical stack, and an unbounded Gauss-Newton step from there lands in a
   wrong basin on the near squares.
 - **Jaw-span selection.** The wrist roll is chosen per move so the moving jaw
-  opens toward the freest neighboring square (`ChessSimEnv.free_span_direction`,
-  `So101Ik.solve(span=...)`), and the piece rides next to the fixed prong while
-  the jaws are open so all the opening slack lands on the free side. In the
+  opens toward the freest neighboring square that the arm can actually reach
+  with the tool near vertical and without folding into itself
+  (`ChessSimEnv.grasp_span`, `So101Ik.solve(span=...)`), and the piece rides
+  next to the fixed prong while the jaws are open so all the opening slack
+  lands on the free side. The solver keeps the hand clear of the arm's own
+  links (mink's collision-avoidance limit): the tight fold over the near
+  squares otherwise drives the gripper into the shoulder. In the
   solver the span objective drives the roll alone: the roll's 320° range puts
   every direction within ~20° of a reachable angle (a little more when staying
   on the current roll branch avoids a wrist flip mid-carry), and a span past
