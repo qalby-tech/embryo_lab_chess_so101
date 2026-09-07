@@ -119,7 +119,7 @@ class PickPlaceController:
 
     def _approach_axis(self, target, offset) -> np.ndarray:
         res = self.env.ik.solve(self.env.data, target, offset=offset, span=self._span)
-        _, mat = self.env.ik.forward(res.q, self.env.data, offset)
+        _, mat = self.env.ik.forward(res.q, offset)
         return mat[:, 0]
 
     def _line(self, start, target, gap, offset, on_step, precise=False,

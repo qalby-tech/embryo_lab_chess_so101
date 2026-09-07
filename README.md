@@ -12,7 +12,7 @@ chess_sim/                 the framework package
   board.py                 board geometry (BoardSpec), square <-> world coordinates
   assets.py                asset registry, piece scaling
   scene.py                 MjSpec assembly (table, board, 32 pieces, arm, cameras) + XML export
-  ik.py                    damped-least-squares IK for the arm
+  ik.py                    IK for the arm: mink QP tasks on an arm-only kinematic model
   gripper.py               measured pinch-pocket / jaw-gap calibration
   controller.py            scripted pick-and-place expert
   reach.py                 which squares/moves the expert can execute
@@ -99,10 +99,18 @@ the current position with clearance for the jaws.
   angle; and the scene uses elliptic friction cones with `impratio` 10,
   because with MuJoCo's default pyramidal cones a held piece creeps through
   the pads by about a centimeter over a two-second carry.
-- **IK is only a target generator.** `So101Ik` (damped least squares) turns
-  "pinch pocket at this square" into joint targets; the position actuators
-  then track them under full dynamics, with a small integral bias per waypoint
-  to cancel the servos' pose-dependent steady-state error.
+- **IK is only a target generator.** `So101Ik` turns "pinch pocket at this
+  square" into joint targets; the position actuators then track them under
+  full dynamics, with a small integral bias per waypoint to cancel the servos'
+  pose-dependent steady-state error. The solver is [mink](https://github.com/kevinzakka/mink):
+  each solve is a few quadratic programs over an arm-only copy of the SO-101
+  mounted as in the scene (`scene.build_arm`; the full scene's 32 free pieces
+  would make each QP 25x slower), with a tool-point task, an axis-align task
+  for the approach direction, a roll-only jaw-span task, a weak posture
+  tie-breaker, and joint limits plus a per-iteration step bound as hard
+  constraints. The step bound matters: the arm's zero pose is a singular
+  vertical stack, and an unbounded Gauss-Newton step from there lands in a
+  wrong basin on the near squares.
 - **Jaw-span selection.** The wrist roll is chosen per move so the moving jaw
   opens toward the freest neighboring square (`ChessSimEnv.free_span_direction`,
   `So101Ik.solve(span=...)`), and the piece rides next to the fixed prong while

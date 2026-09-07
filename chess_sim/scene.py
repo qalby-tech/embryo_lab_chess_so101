@@ -158,6 +158,16 @@ def _add_pieces(spec, board):
                           rgba=[1, 1, 1, 0], density=600)
 
 
+def build_arm(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
+    """The SO-101 alone, mounted exactly as in the scene (same names): the
+    kinematic model the IK solves on, 33x fewer degrees of freedom."""
+    spec = mujoco.MjSpec()
+    spec.modelname = "so101_arm"
+    spec.meshdir = assets.ASSET_DIR
+    _add_arm(spec, board)
+    return spec
+
+
 def _add_arm(spec, board):
     arm = mujoco.MjSpec.from_file(assets.SO101_XML)
     arm.meshdir = assets.ASSET_DIR  # merged assets resolve against the shared tree

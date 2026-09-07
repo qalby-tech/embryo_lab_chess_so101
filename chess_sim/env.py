@@ -19,7 +19,8 @@ from .board import START_FEN, BoardSpec, parse_square
 from .controller import PickPlaceController
 from .ik import So101Ik
 from .reach import ReachMap
-from .scene import ARM_PREFIX, CAMERA_NAMES, PieceSlot, arm_rest_pose, build_scene, export_xml, piece_slots
+from .scene import (ARM_PREFIX, CAMERA_NAMES, PieceSlot, arm_rest_pose, build_arm, build_scene,
+                    export_xml, piece_slots)
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 PLACEMENT_TOLERANCE = 0.011   # piece axis vs square center
@@ -76,7 +77,7 @@ class ChessSimEnv:
                           for s in self.slots}
         self._square_slot: dict[int, PieceSlot] = {}
 
-        self.ik = So101Ik(self.model, prefix=ARM_PREFIX)
+        self.ik = So101Ik(self.model, build_arm(board_spec).compile(), prefix=ARM_PREFIX)
         self._joint_qpos = np.array([self.model.jnt_qposadr[mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_JOINT, ARM_PREFIX + n)] for n in JOINTS])
         self._joint_dof = np.array([self.model.jnt_dofadr[mujoco.mj_name2id(
@@ -93,7 +94,7 @@ class ChessSimEnv:
 
     def _tool_query(self, target: np.ndarray):
         res = self.ik.solve(self.data, target)
-        _, mat = self.ik.forward(res.q, self.data, np.zeros(3))
+        _, mat = self.ik.forward(res.q, np.zeros(3))
         return res, mat
 
     # -- lifecycle -----------------------------------------------------------
