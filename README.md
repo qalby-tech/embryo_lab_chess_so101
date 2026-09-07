@@ -40,7 +40,7 @@ result = env.move("g1", "f3")           # scripted expert: MoveResult(success, p
 print(env.board.fen())                  # python-chess mirror of the physical board
 
 obs = env.step(action)                  # or drive the 6 joints yourself (radians, 30 Hz)
-frame = env.render("top")               # 'top': overhead camera on the mast; 'external': side view
+frame = env.render("top")               # robot cameras: 'top' (overhead mast), 'wrist'; demo: 'external'
 env.export_xml("scene.xml")             # standalone MuJoCo XML of the scene
 ```
 
@@ -55,7 +55,9 @@ rec.end(result.success, placement_error=result.placement_error)
 ```
 
 Each episode directory holds `data.npz` (`observation_state`, `action`), one mp4
-per camera, and `meta.json`; `manifest.jsonl` indexes the dataset. Train only on
+per robot camera (`top.mp4`, `wrist.mp4`: the two cameras the real SO-101 rig
+has, whatever else the env renders), and `meta.json`; `manifest.jsonl` indexes
+the dataset. Train only on
 episodes with `"success": true`.
 
 ## What the scripted expert does
@@ -80,11 +82,16 @@ the current position with clearance for the jaws.
   that map; the sampler excludes squares over 5 mm or inside the near field).
   Closer mounts lose the arm's own back ranks: 4 cm from the edge the servos
   cannot track ranks 1–3 at all, so no game from the initial position.
-- **Cameras.** `top` is a workspace camera mounted as on the real rig: a
-  plate under the arm base carries a 60 cm square-tube mast beside the arm
-  with the camera on top, looking down at the board (`scene.MAST_*`); the
-  image is upright along the files, white at the bottom. `external` is a
-  fixed side view. Both are plain MuJoCo cameras in the exported XML.
+- **Cameras.** The real SO-101 rig has two cameras and datasets record
+  exactly those (`scene.ROBOT_CAMERAS`): `top`, a workspace camera mounted as
+  on the rig, where a plate under the arm base carries a 60 cm square-tube
+  mast beside the arm with the camera on top looking down at the board
+  (`scene.MAST_*`; the image is upright along the files, white at the
+  bottom), and `wrist`, a wide-angle camera on the gripper beside the
+  wrist-roll motor, looking at the fingertips (`scene.WRIST_CAMERA`).
+  `external` is a fixed side view for demos and debugging; `ChessSimEnv`
+  renders the robot cameras by default and `EpisodeRecorder` refuses an env
+  without them. All three are plain MuJoCo cameras in the exported XML.
 - **Piece colliders** are profiled stacks of cylinders sampled from the mesh
   (flat base for stable settling, true radii above it). Generated convex hulls
   rest on a rounded nub and creep across the board.

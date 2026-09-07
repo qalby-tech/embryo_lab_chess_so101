@@ -19,7 +19,15 @@ from .assets import SET_COUNTS, PieceGeometry, piece_asset_name, piece_geometry
 from .board import BoardSpec
 
 ARM_PREFIX = "so101:"
-CAMERA_NAMES = ("external", "top")
+# The real SO-101 rig has exactly two cameras: the overhead camera on the mast
+# and a wrist camera on the gripper. Datasets record those; "external" is a
+# fixed side view for demos and debugging only.
+ROBOT_CAMERAS = ("top", "wrist")
+CAMERA_NAMES = ROBOT_CAMERAS + ("external",)
+# wrist camera in the gripperframe site frame (+x approach, +z jaw span):
+# beside the wrist-roll motor, looking at the fingertips, wide lens
+WRIST_CAMERA = {"pos": (-0.075, 0.045, 0.012), "target": (0.0, 0.0, 0.012),
+                "up": (-1.0, 0.0, 0.0), "fovy": 75}
 _ARM_REST = {"shoulder_pan": 0.0, "shoulder_lift": -1.0, "elbow_flex": 1.3,
              "wrist_flex": 0.4, "wrist_roll": 0.0, "gripper": 0.6}
 
@@ -80,6 +88,10 @@ def build_scene(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
     spec.visual.global_.offwidth = 1280
     spec.visual.global_.offheight = 720
     spec.visual.quality.shadowsize = 4096
+    # near clipping plane is znear * extent: the backdrop would push it past the
+    # fingertips 8 cm in front of the wrist camera, so pin the extent
+    spec.stat.extent = 1.0
+    spec.visual.map.znear = 0.004
 
     _add_environment(spec, board)
     _add_board(spec, board)
@@ -232,6 +244,24 @@ def _add_arm(spec, board):
     frame = spec.worldbody.add_frame(pos=[ax, ay, az],
                                      quat=[np.cos(np.pi / 4), 0, 0, np.sin(np.pi / 4)])
     frame.attach_body(arm.body("base"), ARM_PREFIX, "")
+    _add_wrist_camera(spec)
+
+
+def _add_wrist_camera(spec):
+    """Camera on the gripper body, placed relative to the gripperframe site."""
+    site = spec.site(ARM_PREFIX + "gripperframe")
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, np.asarray(site.quat, dtype=float))
+    rot = rot.reshape(3, 3)                      # site axes in the gripper body frame
+    cam = WRIST_CAMERA
+    pos = np.asarray(site.pos, dtype=float) + rot @ np.asarray(cam["pos"], dtype=float)
+    axes = _lookat_xyaxes(cam["pos"], cam["target"], cam["up"])
+    xyaxes = np.concatenate([rot @ axes[:3], rot @ axes[3:]])
+    gripper = spec.body(ARM_PREFIX + "gripper")
+    gripper.add_camera(name="wrist", pos=list(pos), xyaxes=list(xyaxes), fovy=cam["fovy"])
+    gripper.add_geom(name="wrist_camera", type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.012, 0.012, 0.008],
+                     pos=list(pos - rot @ np.array([0.01, 0.0, 0.0])),
+                     rgba=[0.08, 0.08, 0.08, 1], contype=0, conaffinity=0, group=1, density=0)
 
 
 def arm_rest_pose() -> dict[str, float]:

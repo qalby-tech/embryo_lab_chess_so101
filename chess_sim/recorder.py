@@ -18,6 +18,7 @@ import imageio.v2 as imageio
 import numpy as np
 
 from .env import JOINTS
+from .scene import ROBOT_CAMERAS
 
 
 @dataclass
@@ -28,7 +29,13 @@ class _Buffer:
 
 
 class EpisodeRecorder:
+    """Records exactly the cameras the real robot has (`ROBOT_CAMERAS`: the
+    overhead and wrist cameras), whatever else the env renders for viewing."""
+
     def __init__(self, env, root: str):
+        missing = [cam for cam in ROBOT_CAMERAS if cam not in env.cameras]
+        if missing:
+            raise ValueError(f"env must render the robot cameras {ROBOT_CAMERAS}; missing {missing}")
         self.env = env
         self.root = root
         os.makedirs(root, exist_ok=True)
@@ -37,17 +44,16 @@ class EpisodeRecorder:
         self._buf = _Buffer()
 
     def begin(self, instruction: str, **meta) -> None:
-        self._buf = _Buffer(frames={cam: [] for cam in self.env.cameras})
+        self._buf = _Buffer(frames={cam: [] for cam in ROBOT_CAMERAS})
         self._meta = {"instruction": instruction, "fps": self.env.control_hz,
-                      "joints": list(JOINTS), **meta}
+                      "joints": list(JOINTS), "cameras": list(ROBOT_CAMERAS), **meta}
 
     def on_step(self, action: np.ndarray) -> None:
         """Pass as `on_step` to env.move()/apply_action(); samples before each action."""
-        obs = self.env.observe(images=True)
-        self._buf.states.append(obs.joint_pos)
+        self._buf.states.append(self.env.arm_joint_positions().copy())
         self._buf.actions.append(np.array(action, dtype=np.float32))
-        for cam, frame in obs.images.items():
-            self._buf.frames[cam].append(frame)
+        for cam in ROBOT_CAMERAS:
+            self._buf.frames[cam].append(self.env.render(cam))
 
     def end(self, success: bool, **extra) -> str:
         ep_dir = os.path.join(self.root, f"episode_{self._index:04d}")

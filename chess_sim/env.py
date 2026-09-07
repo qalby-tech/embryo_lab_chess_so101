@@ -19,7 +19,7 @@ from .board import START_FEN, BoardSpec, parse_square
 from .controller import PickPlaceController
 from .ik import So101Ik
 from .reach import ReachMap
-from .scene import (ARM_PREFIX, CAMERA_NAMES, PieceSlot, arm_rest_pose, build_arm, build_scene,
+from .scene import (ARM_PREFIX, ROBOT_CAMERAS, PieceSlot, arm_rest_pose, build_arm, build_scene,
                     export_xml, piece_slots)
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
@@ -57,7 +57,7 @@ class MoveResult:
 
 class ChessSimEnv:
     def __init__(self, board_spec: BoardSpec = BoardSpec(),
-                 cameras: tuple[str, ...] = CAMERA_NAMES,
+                 cameras: tuple[str, ...] = ROBOT_CAMERAS,
                  image_size: tuple[int, int] = (640, 480),
                  control_hz: int = 30):
         self.board_spec = board_spec
@@ -200,7 +200,7 @@ class ChessSimEnv:
                            joint_vel=self.data.qvel[self._joint_dof].copy(),
                            images=imgs, fen=self.board.fen())
 
-    def render(self, camera: str = "external") -> np.ndarray:
+    def render(self, camera: str = "top") -> np.ndarray:
         if self._renderer is None:
             w, h = self._image_size
             self._renderer = mujoco.Renderer(self.model, height=h, width=w)

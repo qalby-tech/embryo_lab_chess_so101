@@ -18,7 +18,8 @@ import imageio.v2 as imageio
 import numpy as np
 
 from chess_sim import ChessSimEnv, START_FEN
-from chess_sim.scene import CAMERA_NAMES
+
+DEMO_CAMERAS = ("external", "top")   # a demo may use the side view; datasets never do
 
 # Giuoco Pianissimo: 20 plies without a capture, castling or promotion
 GIUOCO_PIANISSIMO = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3", "g8f6",
@@ -30,7 +31,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--moves", nargs="*", default=GIUOCO_PIANISSIMO, help="UCI moves")
     ap.add_argument("--fen", default=START_FEN, help="starting position (board field)")
-    ap.add_argument("--cameras", nargs="+", default=list(CAMERA_NAMES),
+    ap.add_argument("--cameras", nargs="+", default=list(DEMO_CAMERAS),
                     help="scene cameras to record, side by side")
     ap.add_argument("--out", default="sim/out/game.mp4")
     args = ap.parse_args()
