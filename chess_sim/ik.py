@@ -25,9 +25,13 @@ SPAN_COST = 0.6        # jaw-span direction error, horizontal components (unitle
 POSTURE_COST = 0.003   # tie-breaker toward the rest posture, per radian (roll excluded)
 ITERATIONS = 60
 TOLERANCE = 1.5e-3     # meters; convergence test for the tool point
+TILT_EXIT = 0.7        # axis-align error chord 2*sin(theta/2): about 41 degrees
+SPAN_EXIT = 0.1        # jaw-span error, horizontal chord: about 6 degrees at zero tilt
+STALL = 1e-6           # radians; a QP step this small means a KKT point (e.g. roll at its limit)
 DAMPING = 1e-6         # Levenberg-Marquardt damping on every QP
 STEP_LIMIT = 0.5       # radians per joint per iteration: bounds the Gauss-Newton step
                        # through singular poses (the zero pose is a straight vertical stack)
+ROLL_STAY = np.pi / 2  # a roll branch that moves less than this keeps the "no wrist twist" bonus
 SOLVER = "daqp"
 
 
@@ -96,7 +100,6 @@ class So101Ik:
     def __init__(self, model: mujoco.MjModel, arm_model: mujoco.MjModel, prefix: str = "",
                  site: str = "gripperframe",
                  rest: tuple[float, ...] = (0.0, -0.6, 0.9, 0.7, 0.0)):
-        self.model = model
         self.site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, prefix + site)
         joints = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, prefix + n) for n in ARM_JOINTS]
         if self.site < 0 or min(joints) < 0:
@@ -147,7 +150,7 @@ class So101Ik:
         return data.site_xpos[self._arm_site] + mat @ offset, mat
 
     def _set_arm(self, q: np.ndarray) -> None:
-        full = self.configuration.q
+        full = self.arm.qpos0.copy()     # every other dof (the gripper) at its default
         full[self._arm_qpos] = q
         self.configuration.update(full)
 
@@ -158,31 +161,39 @@ class So101Ik:
         """Joint angles placing the tool point at `target` (world, meters),
         starting from the arm's current angles in `data`.
 
-        `span`, if given, is a horizontal unit vector the jaw-span axis (tool z,
-        the direction the moving jaw opens toward) should align with; the wrist
-        roll provides that freedom without disturbing the approach direction.
-        A span opposite to the current roll is a saddle for the local solver,
-        so the roll is multi-started (current, current + pi). The span objective
-        acts on the roll alone: a span beyond the roll's range is realized as
-        far as the limit allows (the 320-degree range puts every direction
-        within ~20 degrees of a reachable roll), and the other joints are never
-        bent to serve it.
+        `span`, if given, is the horizontal direction (x, y) the jaw-span axis
+        (tool z, the direction the moving jaw opens toward) should align with;
+        the wrist roll provides that freedom without disturbing the approach
+        direction. A span opposite to the current roll is a saddle for the
+        local solver, so the roll is multi-started (current, current + pi). The
+        span objective acts on the roll alone: a span beyond the roll's range
+        is realized as far as the limit allows (the 320-degree range puts every
+        direction within ~20 degrees of a reachable roll, a little more when
+        staying on the current roll branch avoids a wrist flip mid-carry), and
+        the other joints are never bent to serve it.
         """
         offset = np.zeros(3) if offset is None else np.asarray(offset, dtype=float)
         target = np.asarray(target, dtype=float)
+        if span is not None:
+            span = np.asarray(span, dtype=float)[:2]
+            span = span / np.linalg.norm(span)
+        if not (np.all(np.isfinite(target)) and np.all(np.isfinite(offset))
+                and (span is None or np.all(np.isfinite(span)))):
+            raise ValueError("IK target, offset and span must be finite")
         q0 = data.qpos[self.qpos_adr].copy()
-        seeds = [q0]
+        best = self._iterate(q0, target, offset, span)
         if span is not None:
             flipped = q0.copy()
             flipped[4] = self._wrap_roll(q0[4] + np.pi)
-            seeds.append(flipped)
-        # keep the current roll branch unless the flipped one is clearly better:
-        # flipping between consecutive waypoints would twist the wrist mid-motion
-        best = None
-        for i, seed in enumerate(seeds):
-            res = self._iterate(seed, target, offset, span)
-            if best is None or res[1] < (0.5 if i else 1.0) * best[1]:
-                best = res
+            other = self._iterate(flipped, target, offset, span)
+            # keep the current roll branch unless the flipped one is clearly
+            # better: flipping between consecutive waypoints would twist the
+            # wrist mid-motion. When the current branch itself had to travel far
+            # (both branches pinned at a limit across the unreachable arc) there
+            # is no twist to avoid, and the better residual simply wins.
+            stays = abs(best[0][4] - q0[4]) < ROLL_STAY
+            if other[1] < (0.5 if stays else 1.0) * best[1]:
+                best = other
         q, _ = best
         pos, mat = self.forward(q, offset)
         tilt = float(np.arccos(np.clip(-mat[2, 0], -1.0, 1.0)))
@@ -204,14 +215,17 @@ class So101Ik:
         self._point.target = target
         tasks = [self._point, self._tilt, self._posture]
         if span is not None:
-            self._span.target = np.asarray(span, dtype=float)
+            self._span.target = span
             tasks.append(self._span)
         for _ in range(ITERATIONS):
             if (np.linalg.norm(self._point.compute_error(cfg)) < TOLERANCE
-                    and np.linalg.norm(self._tilt.compute_error(cfg)) < 0.7
-                    and (span is None or np.linalg.norm(self._span.compute_error(cfg)) < 0.1)):
+                    and np.linalg.norm(self._tilt.compute_error(cfg)) < TILT_EXIT
+                    and (span is None or np.linalg.norm(self._span.compute_error(cfg)) < SPAN_EXIT)):
                 break
+            # dt = 1: the QP solves for the joint displacement of this iteration
             v = mink.solve_ik(cfg, tasks, dt=1.0, solver=SOLVER, damping=DAMPING, limits=self._limits)
+            if np.abs(v).max() < STALL:
+                break
             cfg.integrate_inplace(v, 1.0)
         residual = [POSITION_COST * self._point.compute_error(cfg), TILT_COST * self._tilt.compute_error(cfg)]
         if span is not None:

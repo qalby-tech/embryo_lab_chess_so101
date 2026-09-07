@@ -11,7 +11,8 @@ chess_sim/                 the framework package
   calib/                   executed_reach.json — measured per-square fingertip accuracy
   board.py                 board geometry (BoardSpec), square <-> world coordinates
   assets.py                asset registry, piece scaling
-  scene.py                 MjSpec assembly (table, board, 32 pieces, arm, cameras) + XML export
+  scene.py                 MjSpec assembly (table, board, 32 pieces, arm, cameras), XML export,
+                           arm-only model for the IK
   ik.py                    IK for the arm: mink QP tasks on an arm-only kinematic model
   gripper.py               measured pinch-pocket / jaw-gap calibration
   controller.py            scripted pick-and-place expert
@@ -103,9 +104,10 @@ the current position with clearance for the jaws.
   square" into joint targets; the position actuators then track them under
   full dynamics, with a small integral bias per waypoint to cancel the servos'
   pose-dependent steady-state error. The solver is [mink](https://github.com/kevinzakka/mink):
-  each solve is a few quadratic programs over an arm-only copy of the SO-101
-  mounted as in the scene (`scene.build_arm`; the full scene's 32 free pieces
-  would make each QP 25x slower), with a tool-point task, an axis-align task
+  each solve is a handful of quadratic programs over an arm-only copy of the
+  SO-101 mounted as in the scene (`scene.build_arm`: 6 degrees of freedom
+  instead of the scene's 198, which measured about 25x slower per QP), with a
+  tool-point task, an axis-align task
   for the approach direction, a roll-only jaw-span task, a weak posture
   tie-breaker, and joint limits plus a per-iteration step bound as hard
   constraints. The step bound matters: the arm's zero pose is a singular
@@ -116,8 +118,10 @@ the current position with clearance for the jaws.
   `So101Ik.solve(span=...)`), and the piece rides next to the fixed prong while
   the jaws are open so all the opening slack lands on the free side. In the
   solver the span objective drives the roll alone: the roll's 320° range puts
-  every direction within ~20° of a reachable angle, and a span past the limit
-  is realized as far as possible instead of bending the arm to serve it.
+  every direction within ~20° of a reachable angle (a little more when staying
+  on the current roll branch avoids a wrist flip mid-carry), and a span past
+  the limit is realized as far as possible instead of bending the arm to
+  serve it.
 - **Crowding limit.** On a fully populated opening position the ~5 mm prongs
   have only ~2 mm of corridor between 28 mm squares, and the roll joint cannot
   reach a full 180°; expect occasional neighbor contact there. Sparse and
