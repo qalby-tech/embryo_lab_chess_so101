@@ -25,10 +25,11 @@ import chess
 import numpy as np
 
 from chess_sim import Appearance, ChessSimEnv, EpisodeRecorder
-from play_random_moves import describe, random_position
+from play_random_moves import describe, position_with_move, random_position
 
 
-def collect(out: str, episodes: int, seed: int, randomize: bool, image_size) -> tuple[int, int]:
+def collect(out: str, episodes: int, seed: int, randomize: bool, image_size,
+            moves: tuple[str, ...] = ()) -> tuple[int, int]:
     """Record `episodes` moves into `out`; returns (successes, episodes)."""
     rng = random.Random(seed)
     looks = np.random.default_rng(seed)
@@ -43,12 +44,22 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size) -> 
         if randomize and i > 0:
             env.recolor(Appearance.random(looks))
         while True:
-            board = random_position(rng, rng.randint(2, 8))
-            env.reset(board.board_fen())
-            candidates = env.executable_moves()
-            if candidates:
-                break
-        mv = rng.choice(candidates)
+            if moves:
+                # narrow task: the move is fixed, the rest of the board is not
+                mv = chess.Move.from_uci(rng.choice(moves))
+                board = position_with_move(rng, rng.randint(2, 8), mv)
+                if board is None:
+                    continue
+                env.reset(board.board_fen())
+                if mv in env.executable_moves():
+                    break
+            else:
+                board = random_position(rng, rng.randint(2, 8))
+                env.reset(board.board_fen())
+                candidates = env.executable_moves()
+                if candidates:
+                    mv = rng.choice(candidates)
+                    break
         recorder.begin(describe(env.board, mv), fen=env.board.fen(), move=mv.uci(),
                        task="chess_move", appearance=env.appearance.__dict__ if randomize else None)
         result = env.move(chess.square_name(mv.from_square), chess.square_name(mv.to_square),
@@ -61,8 +72,8 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size) -> 
 
 
 def _worker(args):
-    out, episodes, seed, randomize, image_size = args
-    return collect(out, episodes, seed, randomize, image_size)
+    out, episodes, seed, randomize, image_size, moves = args
+    return collect(out, episodes, seed, randomize, image_size, moves)
 
 
 def main():
@@ -73,15 +84,18 @@ def main():
     ap.add_argument("--randomize", action="store_true", help="random appearance per episode")
     ap.add_argument("--image-size", type=int, nargs=2, default=(640, 480), metavar=("W", "H"))
     ap.add_argument("--chunk", type=int, default=25, help="episodes per worker process")
+    ap.add_argument("--moves", default=None,
+                    help="comma-separated UCI moves to record instead of random ones, e.g. e2e4,d7d5")
     ap.add_argument("--out", default="datasets/chess")
     args = ap.parse_args()
 
+    moves = tuple(m.strip() for m in args.moves.split(",")) if args.moves else ()
     existing = len([d for d in os.listdir(args.out) if d.startswith("shard_")]) if os.path.isdir(args.out) else 0
     jobs, remaining, index = [], args.episodes, existing
     while remaining > 0:
         count = min(args.chunk, remaining)
         jobs.append((os.path.join(args.out, f"shard_{index:04d}"), count,
-                     args.seed + 1000 * index, args.randomize, tuple(args.image_size)))
+                     args.seed + 1000 * index, args.randomize, tuple(args.image_size), moves))
         remaining -= count
         index += 1
     started = time.time()

@@ -36,6 +36,45 @@ def random_position(rng: random.Random, extra_pieces: int) -> chess.Board:
             return board
 
 
+def _spare_pieces(board: chess.Board, square: int) -> list[chess.Piece]:
+    """Pieces a set still has left over once `board` is accounted for. The scene
+    owns exactly one set, so a position asking for a second queen cannot be built."""
+    used: dict[tuple[int, bool], int] = {}
+    for piece in board.piece_map().values():
+        used[(piece.piece_type, piece.color)] = used.get((piece.piece_type, piece.color), 0) + 1
+    spare = []
+    for ptype, count in SET_COUNTS.items():
+        if ptype == chess.KING:
+            continue
+        if ptype == chess.PAWN and chess.square_rank(square) in (0, 7):
+            continue
+        for color in (chess.WHITE, chess.BLACK):
+            spare += [chess.Piece(ptype, color)] * (count - used.get((ptype, color), 0))
+    return spare
+
+
+def position_with_move(rng: random.Random, extra_pieces: int, move: chess.Move,
+                       attempts: int = 40) -> chess.Board | None:
+    """A random sparse position in which `move` is available: a piece to pick on
+    the source square, nothing on the target. Used to train and score a narrow
+    task, where the move is fixed and only the rest of the board varies."""
+    for _ in range(attempts):
+        board = random_position(rng, extra_pieces)
+        if board.king(chess.WHITE) in (move.from_square, move.to_square) or \
+                board.king(chess.BLACK) in (move.from_square, move.to_square):
+            continue
+        board.remove_piece_at(move.to_square)
+        piece = board.piece_at(move.from_square)
+        if piece is None:
+            spare = _spare_pieces(board, move.from_square)
+            if not spare:
+                continue
+            board.set_piece_at(move.from_square, rng.choice(spare))
+        if board.is_valid():
+            return board
+    return None
+
+
 def describe(board: chess.Board, move: chess.Move) -> str:
     """The instruction given to a policy: purely spatial, so executing it needs
     no chess knowledge and no piece-type recognition. Which move to play is the

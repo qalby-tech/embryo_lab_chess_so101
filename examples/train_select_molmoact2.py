@@ -70,7 +70,8 @@ def evaluate(args, checkpoint: str) -> dict:
         [os.path.expanduser("~/vla/venv/bin/python"), "examples/eval_molmoact2.py",
          "--checkpoint", checkpoint, "--episodes", str(args.eval_episodes),
          "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
-         "--dataset-root", args.root],
+         "--dataset-root", args.root]
+        + (["--moves", args.moves] if args.moves else []),
         capture_output=True, text=True)
     sys.stdout.write(out.stdout[-2000:])
     match = re.search(r"(\d+)/(\d+) successes; median placement error ([\d.]+) mm", out.stdout)
@@ -119,6 +120,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--train-mode-vlm", default="lora")
     ap.add_argument("--eval-episodes", type=int, default=6)
+    ap.add_argument("--moves", default=None,
+                    help="score only these UCI moves, for a narrow-task run")
     ap.add_argument("--eval-seed", type=int, default=100)
     ap.add_argument("--eval-max-steps", type=int, default=300)
     args = ap.parse_args()

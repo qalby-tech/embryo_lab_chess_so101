@@ -24,7 +24,7 @@ import torch
 from chess_sim import ChessSimEnv
 from chess_sim.env import DISTURB_TOLERANCE, PLACEMENT_TOLERANCE, UPRIGHT_MIN
 from export_lerobot import CAMERAS, JOINT_OFFSETS, JOINT_SIGNS, to_so101_degrees
-from play_random_moves import describe, random_position
+from play_random_moves import describe, position_with_move, random_position
 
 
 def to_radians(degrees: np.ndarray) -> np.ndarray:
@@ -56,15 +56,24 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
-                hold: int = 1) -> dict:
+                hold: int = 1, moves: tuple[str, ...] = ()) -> dict:
     """One instructed move under policy control; returns the outcome."""
     while True:
-        board = random_position(rng, rng.randint(2, 8))
-        env.reset(board.board_fen())
-        candidates = env.executable_moves()
-        if candidates:
-            break
-    move = rng.choice(candidates)
+        if moves:   # score the same narrow task the policy was trained on
+            move = chess.Move.from_uci(rng.choice(moves))
+            board = position_with_move(rng, rng.randint(2, 8), move)
+            if board is None:
+                continue
+            env.reset(board.board_fen())
+            if move in env.executable_moves():
+                break
+        else:
+            board = random_position(rng, rng.randint(2, 8))
+            env.reset(board.board_fen())
+            candidates = env.executable_moves()
+            if candidates:
+                move = rng.choice(candidates)
+                break
     instruction = describe(env.board, move)
     slot = env.slot_at(chess.square_name(move.from_square))
     before = {sq: env.piece_position(sl)[:2].copy() for sq, sl in env._square_slot.items()}
@@ -101,6 +110,8 @@ def main():
     ap.add_argument("--max-steps", type=int, default=400, help="control steps per episode")
     ap.add_argument("--dataset-root", default=None,
                     help="training dataset, read for the rate the policy emits targets at")
+    ap.add_argument("--moves", default=None,
+                    help="comma-separated UCI moves to score instead of random ones")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
@@ -126,11 +137,12 @@ def main():
     if hold > 1:
         print(f"policy emits targets at {env.control_hz // hold} Hz; "
               f"holding each for {hold} control steps")
+    moves = tuple(m.strip() for m in args.moves.split(",")) if args.moves else ()
     rng = random.Random(args.seed)
     successes, errors = 0, []
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
-                              record, hold)
+                              record, hold, moves)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         print(f"[{i}] {outcome['instruction']}: {'OK' if outcome['success'] else 'FAIL'} "
