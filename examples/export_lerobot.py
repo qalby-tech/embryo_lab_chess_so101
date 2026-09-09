@@ -75,7 +75,16 @@ def main():
                     choices=["h264", "h264_nvenc", "hevc", "libsvtav1", "auto"])
     ap.add_argument("--crf", type=int, default=23)
     ap.add_argument("--encoder-threads", type=int, default=4)
+    # Keeping every frame makes the action a copy of the next observed state
+    # (the servo tracks its target within a degree), so a policy scores well by
+    # echoing its input and never has to ground the instruction. `--stride 3`
+    # keeps every third frame: consecutive targets are then several degrees
+    # apart, an action chunk spans the whole approach instead of one second,
+    # and the decisive opening frames make up three times as much of the data.
+    ap.add_argument("--stride", type=int, default=1, help="keep every Nth frame")
     args = ap.parse_args()
+    if args.stride < 1:
+        raise SystemExit("--stride must be at least 1")
 
     convert = to_so101_degrees if args.convention == "so101" else (lambda v: v)
     sources = episode_dirs(args.source)
@@ -85,7 +94,10 @@ def main():
     first = next((m for m in map(read_meta, sources) if m), None)
     if first is None:
         raise SystemExit(f"no readable episode metadata under {args.source}")
-    fps = int(first.get("fps", 30))
+    recorded_fps = int(first.get("fps", 30))
+    if recorded_fps % args.stride:
+        raise SystemExit(f"--stride {args.stride} does not divide the recorded {recorded_fps} fps")
+    fps = recorded_fps // args.stride
     probe = imageio.get_reader(os.path.join(sources[0], f"{CAMERAS[0]}.mp4"))
     height, width = probe.get_data(0).shape[:2]
     probe.close()
@@ -117,7 +129,7 @@ def main():
         states, actions = data["observation_state"], data["action"]
         readers = {cam: imageio.get_reader(os.path.join(path, f"{cam}.mp4")) for cam in CAMERAS}
         frames = min(len(states), len(actions), *(r.count_frames() for r in readers.values()))
-        for i in range(frames):
+        for i in range(0, frames, args.stride):
             frame = {"observation.state": convert(states[i]).astype(np.float32),
                      "action": convert(actions[i]).astype(np.float32),
                      "task": meta["instruction"]}
@@ -133,7 +145,8 @@ def main():
     dataset.finalize()
     print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} incomplete "
           f"recordings skipped) to {args.root}")
-    print(f"cameras {CAMERAS} at {width}x{height}, {fps} fps, convention {args.convention}")
+    print(f"cameras {CAMERAS} at {width}x{height}, {fps} fps "
+          f"(recorded {recorded_fps}, stride {args.stride}), convention {args.convention}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ Runs in the VLA environment (Python 3.12 with lerobot), with the simulator
 package importable: PYTHONPATH=~/chess_so101:~/chess_so101/examples.
 """
 import argparse
+import json
+import os
 import random
 
 import chess
@@ -40,7 +42,21 @@ def observation(env: ChessSimEnv, instruction: str, device: str) -> dict:
     return batch
 
 
-def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None) -> dict:
+def dataset_fps(root: str | None, default: int = 30) -> int:
+    """The rate the policy was trained at. A policy trained on a strided export
+    emits targets slower than the control loop runs, and each one has to be held
+    for the difference or the arm races through the trajectory."""
+    if not root:
+        return default
+    try:
+        with open(os.path.join(root, "meta", "info.json")) as f:
+            return int(json.load(f)["fps"])
+    except (OSError, ValueError, KeyError):
+        return default
+
+
+def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
+                hold: int = 1) -> dict:
     """One instructed move under policy control; returns the outcome."""
     while True:
         board = random_position(rng, rng.randint(2, 8))
@@ -56,11 +72,15 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
 
     preprocess, postprocess = processors
     policy.reset()
-    for _ in range(max_steps):
+    steps = 0
+    while steps < max_steps:
         with torch.inference_mode():
             batch = preprocess(observation(env, instruction, device))
             action = postprocess(policy.select_action(batch))
-        env.apply_action(to_radians(action[0].float().cpu().numpy()), on_step)
+        command = to_radians(action[0].float().cpu().numpy())
+        for _ in range(hold):
+            env.apply_action(command, on_step)
+            steps += 1
 
     position = env.piece_position(slot)
     error = float(np.linalg.norm(position[:2] - target))
@@ -78,7 +98,9 @@ def main():
     ap.add_argument("--checkpoint", required=True, help="trained policy directory")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=100)
-    ap.add_argument("--max-steps", type=int, default=300, help="control steps per episode")
+    ap.add_argument("--max-steps", type=int, default=400, help="control steps per episode")
+    ap.add_argument("--dataset-root", default=None,
+                    help="training dataset, read for the rate the policy emits targets at")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
@@ -100,10 +122,15 @@ def main():
         if writer is not None:
             writer.append_data(np.concatenate([env.render("external"), env.render("top")], axis=1))
 
+    hold = max(1, round(env.control_hz / dataset_fps(args.dataset_root)))
+    if hold > 1:
+        print(f"policy emits targets at {env.control_hz // hold} Hz; "
+              f"holding each for {hold} control steps")
     rng = random.Random(args.seed)
     successes, errors = 0, []
     for i in range(args.episodes):
-        outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device, record)
+        outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
+                              record, hold)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         print(f"[{i}] {outcome['instruction']}: {'OK' if outcome['success'] else 'FAIL'} "

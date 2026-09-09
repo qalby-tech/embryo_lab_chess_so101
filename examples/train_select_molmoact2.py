@@ -69,7 +69,8 @@ def evaluate(args, checkpoint: str) -> dict:
     out = subprocess.run(
         [os.path.expanduser("~/vla/venv/bin/python"), "examples/eval_molmoact2.py",
          "--checkpoint", checkpoint, "--episodes", str(args.eval_episodes),
-         "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps)],
+         "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
+         "--dataset-root", args.root],
         capture_output=True, text=True)
     sys.stdout.write(out.stdout[-2000:])
     match = re.search(r"(\d+)/(\d+) successes; median placement error ([\d.]+) mm", out.stdout)
