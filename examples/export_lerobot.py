@@ -40,6 +40,16 @@ def to_so101_degrees(values: np.ndarray) -> np.ndarray:
     return np.degrees(values) * JOINT_SIGNS + JOINT_OFFSETS
 
 
+def read_meta(path: str) -> dict | None:
+    """An episode's metadata, or None if it was never written completely
+    (a recording interrupted mid-write leaves an empty meta.json)."""
+    try:
+        with open(os.path.join(path, "meta.json")) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def episode_dirs(root: str) -> list[str]:
     """Episode directories under `root`, including worker shards, in order."""
     out = []
@@ -72,7 +82,9 @@ def main():
     if not sources:
         raise SystemExit(f"no recorded episodes under {args.source}")
 
-    first = json.load(open(os.path.join(sources[0], "meta.json")))
+    first = next((m for m in map(read_meta, sources) if m), None)
+    if first is None:
+        raise SystemExit(f"no readable episode metadata under {args.source}")
     fps = int(first.get("fps", 30))
     probe = imageio.get_reader(os.path.join(sources[0], f"{CAMERAS[0]}.mp4"))
     height, width = probe.get_data(0).shape[:2]
@@ -90,11 +102,14 @@ def main():
         repo_id=args.repo_id, fps=fps, features=features, root=args.root, robot_type="so101",
         rgb_encoder=VideoEncoderConfig(vcodec=args.vcodec, crf=args.crf, g=2, pix_fmt="yuv420p"),
         streaming_encoding=True, encoder_threads=args.encoder_threads)
-    exported = skipped = 0
+    exported = skipped = damaged = 0
     for path in sources:
         if args.max_episodes is not None and exported >= args.max_episodes:
             break
-        meta = json.load(open(os.path.join(path, "meta.json")))
+        meta = read_meta(path)
+        if meta is None:
+            damaged += 1
+            continue
         if not meta.get("success") and not args.keep_failures:
             skipped += 1
             continue
@@ -116,7 +131,8 @@ def main():
         if exported % 25 == 0:
             print(f"  {exported} episodes exported", flush=True)
     dataset.finalize()
-    print(f"exported {exported} episodes ({skipped} unsuccessful skipped) to {args.root}")
+    print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} incomplete "
+          f"recordings skipped) to {args.root}")
     print(f"cameras {CAMERAS} at {width}x{height}, {fps} fps, convention {args.convention}")
 
 
