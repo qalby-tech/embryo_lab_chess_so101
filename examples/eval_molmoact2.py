@@ -56,7 +56,7 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
-                hold: int = 1, moves: tuple[str, ...] = ()) -> dict:
+                hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False) -> dict:
     """One instructed move under policy control; returns the outcome."""
     while True:
         if moves:   # score the same narrow task the policy was trained on
@@ -81,15 +81,25 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
 
     preprocess, postprocess = processors
     policy.reset()
+    previous = env.arm_joint_positions().copy()
     steps = 0
     while steps < max_steps:
         with torch.inference_mode():
             batch = preprocess(observation(env, instruction, device))
             action = postprocess(policy.select_action(batch))
         command = to_radians(action[0].float().cpu().numpy())
-        for _ in range(hold):
-            env.apply_action(command, on_step)
+        for k in range(hold):
+            # A policy trained at a reduced rate emits one target per `hold`
+            # control periods. Holding it as a step asks the servo for the whole
+            # jump at once, which is what knocks pieces over; interpolating asks
+            # for the same motion spread across the period.
+            if interpolate:
+                a = (k + 1) / hold
+                env.apply_action(previous * (1 - a) + command * a, on_step)
+            else:
+                env.apply_action(command, on_step)
             steps += 1
+        previous = command
 
     position = env.piece_position(slot)
     error = float(np.linalg.norm(position[:2] - target))
@@ -112,6 +122,8 @@ def main():
                     help="training dataset, read for the rate the policy emits targets at")
     ap.add_argument("--moves", default=None,
                     help="comma-separated UCI moves to score instead of random ones")
+    ap.add_argument("--interpolate", action="store_true",
+                    help="ramp between the policy's targets instead of stepping to each")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
@@ -142,7 +154,7 @@ def main():
     successes, errors = 0, []
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
-                              record, hold, moves)
+                              record, hold, moves, args.interpolate)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         print(f"[{i}] {outcome['instruction']}: {'OK' if outcome['success'] else 'FAIL'} "
