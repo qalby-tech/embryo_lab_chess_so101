@@ -26,6 +26,7 @@ from .scene import (ARM_PREFIX, KEY_LIGHT_DIFFUSE, ROBOT_CAMERAS, PieceSlot, arm
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 PLACEMENT_TOLERANCE = 0.011   # piece axis vs square center
+CAPTURE_TOLERANCE = 0.030     # a discarded piece only has to land in its tray slot
 DISTURB_TOLERANCE = 0.010     # any other piece moving more than this fails a move
 UPRIGHT_MIN = 0.85            # z-axis alignment of a standing piece
 # free space the open jaw needs beyond the grasped piece's surface
@@ -79,6 +80,8 @@ class ChessSimEnv:
         self._slot_dof = {s.body: self.model.jnt_dofadr[self.model.body_jntadr[self._slot_body[s.body]]]
                           for s in self.slots}
         self._square_slot: dict[int, PieceSlot] = {}
+        self._captured: list[PieceSlot] = []
+        self._loose: list[tuple[PieceSlot, chess.Piece]] = []
 
         self.ik = So101Ik(self.model, build_arm(board_spec).compile(), prefix=ARM_PREFIX)
         self._joint_qpos = np.array([self.model.jnt_qposadr[mujoco.mj_name2id(
@@ -107,6 +110,8 @@ class ChessSimEnv:
         position = chess.Board(fen if " " in fen else f"{fen} w - - 0 1")
         self.board = position
         self._square_slot = {}
+        self._captured = []
+        self._loose = []
         pool = {s.body: s for s in self.slots}
         for square, piece in position.piece_map().items():
             slot = next((s for s in pool.values() if s.piece == piece), None)
@@ -213,6 +218,141 @@ class ChessSimEnv:
         return MoveResult(from_square, to_square, bool(success), error, disturbed,
                           self._step_count - start_steps, reason, waypoints_precise=bool(executed))
 
+    def active_slots(self) -> list[PieceSlot]:
+        """Every piece the arm has to work around: those on squares, those
+        loose on the table, and those already in the discard tray."""
+        return list(self._square_slot.values()) + [sl for sl, _ in self._loose] + self._captured
+
+    def executable_captures(self) -> list[int]:
+        """Squares whose piece the arm can lift and set down in the tray."""
+        if self.free_capture_slot() is None:
+            return []
+        tray = np.array(self.free_capture_slot())
+        out = []
+        for square, slot in self._square_slot.items():
+            if square not in self.reach.squares:
+                continue
+            plan = grasp_plan(slot.geometry, self.board_spec)
+            src = np.array([*self.board_spec.square_center(square), plan.z_grasp])
+            dst = np.array([*tray, plan.z_grasp])
+            if (self.grasp_span(src, plan.off_open, exclude=slot) is not None
+                    and self.grasp_span(dst, plan.off_hold, exclude=slot) is not None):
+                out.append(square)
+        return out
+
+    # -- pieces that are not on a square -------------------------------------
+
+    def displace(self, square: str, xy, topple: bool = False) -> PieceSlot | None:
+        """Take the piece off `square` and leave it loose on the table at `xy`.
+
+        Models what happens when a piece is knocked over or pushed off the
+        board: it is no longer on any square, and an instruction that wants it
+        back has to name the piece rather than a square. `topple` lays it on its
+        side, which the scripted grasp cannot yet pick up - see restore()."""
+        src = parse_square(square)
+        slot = self._square_slot.pop(src, None)
+        if slot is None:
+            return None
+        piece = self.board.remove_piece_at(src)
+        quat = (0.7071, 0.0, 0.7071, 0.0) if topple else (1.0, 0.0, 0.0, 0.0)
+        z = self.board_spec.table_top + (slot.geometry.collider_radius if topple else 0.0)
+        self.set_piece_pose(slot, (float(xy[0]), float(xy[1]), z), quat, zero_velocity=True)
+        # qpos alone is not the simulation state: without a forward pass the
+        # piece is still reported at its old square, and the controller would
+        # reach for a square the piece has left.
+        mujoco.mj_forward(self.model, self.data)
+        for _ in range(int(0.4 * self.control_hz)):    # let it come to rest
+            self.apply_action(self._current_action())
+        self._loose.append((slot, piece))
+        return slot
+
+    @property
+    def loose_pieces(self) -> list[tuple[PieceSlot, chess.Piece]]:
+        """Pieces lying off their squares, with what they are."""
+        return list(self._loose)
+
+    def restore(self, slot: PieceSlot, square: str,
+                on_step: Callable[[np.ndarray], None] | None = None) -> MoveResult:
+        """Put a loose piece back on `square`, scored like an ordinary move."""
+        dst = parse_square(square)
+        entry = next((e for e in self._loose if e[0] is slot), None)
+        if entry is None:
+            return MoveResult("loose", square, False, 0.0, [], 0, "piece is not loose")
+        if dst in self._square_slot:
+            return MoveResult("loose", square, False, 0.0, [], 0, "target square occupied")
+        before = {s: self.piece_position(sl)[:2] for s, sl in self._square_slot.items()}
+        start_steps = self._step_count
+
+        executed = self.controller.pick_place(slot, self.board_spec.square_center(dst), on_step)
+        for _ in range(int(0.3 * self.control_hz)):
+            self.apply_action(self._current_action(), on_step)
+
+        pos = self.piece_position(slot)
+        tx, ty = self.board_spec.square_center(dst)
+        error = float(np.hypot(pos[0] - tx, pos[1] - ty))
+        upright = self.piece_upright(slot) > UPRIGHT_MIN
+        disturbed = [chess.square_name(s) for s, xy in before.items()
+                     if np.linalg.norm(self.piece_position(self._square_slot[s])[:2] - xy)
+                     > DISTURB_TOLERANCE]
+        success = error < PLACEMENT_TOLERANCE and upright and not disturbed
+        if error < PLACEMENT_TOLERANCE and upright:
+            self._loose.remove(entry)
+            self._square_slot[dst] = slot
+            self.board.set_piece_at(dst, entry[1])
+        return MoveResult("loose", square, bool(success), error, disturbed,
+                          self._step_count - start_steps,
+                          "" if success else "placement error" if error >= PLACEMENT_TOLERANCE
+                          else "piece fell" if not upright else "disturbed other pieces",
+                          waypoints_precise=bool(executed))
+
+    def free_capture_slot(self) -> tuple[float, float] | None:
+        """The next unused discard position, or None once the tray is full."""
+        if len(self._captured) >= self.board_spec.capture_slots:
+            return None
+        return self.board_spec.capture_slot(len(self._captured))
+
+    def capture(self, square: str,
+                on_step: Callable[[np.ndarray], None] | None = None) -> MoveResult:
+        """Take the piece on `square` off the board and set it down in the tray.
+
+        This is the first half of a capture: the piece standing on the target
+        square is removed before the capturing piece moves onto it. Where in the
+        tray it lands hardly matters, so the placement rule is looser than a
+        move's - what matters is that it leaves the board, stays upright and
+        disturbs nothing still in play."""
+        src = parse_square(square)
+        slot = self._square_slot.get(src)
+        if slot is None:
+            return MoveResult(square, "off board", False, 0.0, [], 0, "no piece on source square")
+        target = self.free_capture_slot()
+        if target is None:
+            return MoveResult(square, "off board", False, 0.0, [], 0, "discard tray is full")
+        before = {s: self.piece_position(sl)[:2] for s, sl in self._square_slot.items()}
+        start_steps = self._step_count
+
+        executed = self.controller.pick_place(slot, target, on_step)
+        for _ in range(int(0.3 * self.control_hz)):
+            self.apply_action(self._current_action(), on_step)
+
+        pos = self.piece_position(slot)
+        error = float(np.hypot(pos[0] - target[0], pos[1] - target[1]))
+        field = self.board_spec.field / 2
+        off_board = abs(pos[0]) > field or abs(pos[1]) > field
+        upright = self.piece_upright(slot) > UPRIGHT_MIN
+        disturbed = [chess.square_name(s) for s, xy in before.items()
+                     if s != src and np.linalg.norm(self.piece_position(self._square_slot[s])[:2] - xy)
+                     > DISTURB_TOLERANCE]
+        success = off_board and error < CAPTURE_TOLERANCE and upright and not disturbed
+        reason = "" if success else (
+            "still on the board" if not off_board else
+            "missed the tray" if error >= CAPTURE_TOLERANCE else
+            "piece fell" if not upright else "disturbed other pieces")
+        if off_board and upright and error < CAPTURE_TOLERANCE:
+            self._captured.append(self._square_slot.pop(src))
+            self.board.remove_piece_at(src)
+        return MoveResult(square, "off board", bool(success), error, disturbed,
+                          self._step_count - start_steps, reason, waypoints_precise=bool(executed))
+
     # -- observation ---------------------------------------------------------
 
     def observe(self, images: bool = True) -> Observation:
@@ -245,7 +385,7 @@ class ChessSimEnv:
         """
         xy = np.asarray(xy, dtype=float)
         others = [(self.piece_position(sl)[:2] - xy, sl.geometry.collider_radius)
-                  for sl in self._square_slot.values() if sl is not exclude]
+                  for sl in self.active_slots() if sl is not exclude]
         lane = 0.75 * self.board_spec.square
 
         def room(d):
