@@ -56,11 +56,12 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
-                hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False) -> dict:
+                hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False,
+                index: int = 0) -> dict:
     """One instructed move under policy control; returns the outcome."""
     while True:
-        if moves:   # score the same narrow task the policy was trained on
-            move = chess.Move.from_uci(rng.choice(moves))
+        if moves:   # score the narrow task the policy was trained on, each move equally often
+            move = chess.Move.from_uci(moves[index % len(moves)])
             board = position_with_move(rng, rng.randint(2, 8), move)
             if board is None:
                 continue
@@ -107,8 +108,18 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
     disturbed = [chess.square_name(sq) for sq, xy in before.items()
                  if sq != move.from_square
                  and np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy) > DISTURB_TOLERANCE]
+    # Which piece actually moved. With several moves in play, going to the wrong
+    # square is a failure of grounding and needs telling apart from a clumsy
+    # grasp of the right one.
+    shifted = {sq: float(np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy))
+               for sq, xy in before.items()}
+    picked = max(shifted, key=shifted.get) if shifted else None
+    if picked is None or shifted[picked] < DISTURB_TOLERANCE:
+        picked = None
     return {"move": move.uci(), "instruction": instruction, "placement_error": error,
             "upright": upright, "disturbed": disturbed,
+            "picked": chess.square_name(picked) if picked is not None else None,
+            "right_piece": picked == move.from_square,
             "success": bool(error < PLACEMENT_TOLERANCE and upright and not disturbed)}
 
 
@@ -151,12 +162,13 @@ def main():
               f"holding each for {hold} control steps")
     moves = tuple(m.strip() for m in args.moves.split(",")) if args.moves else ()
     rng = random.Random(args.seed)
-    successes, errors = 0, []
+    successes, errors, outcomes = 0, [], []
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
-                              record, hold, moves, args.interpolate)
+                              record, hold, moves, args.interpolate, i)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
+        outcomes.append(outcome)
         print(f"[{i}] {outcome['instruction']}: {'OK' if outcome['success'] else 'FAIL'} "
               f"({outcome['placement_error'] * 1000:.1f} mm"
               f"{', fell' if not outcome['upright'] else ''}"
@@ -164,6 +176,14 @@ def main():
               flush=True)
     print(f"{successes}/{args.episodes} successes; median placement error "
           f"{np.median(errors) * 1000:.1f} mm")
+    if moves:
+        right = sum(o["right_piece"] for o in outcomes)
+        print(f"picked the named piece in {right}/{len(outcomes)} episodes")
+        for uci in moves:
+            group = [o for o in outcomes if o["move"] == uci]
+            if group:
+                print(f"  {uci}: {sum(o['success'] for o in group)}/{len(group)} success, "
+                      f"{sum(o['right_piece'] for o in group)}/{len(group)} right piece")
     if writer is not None:
         writer.close()
         print("wrote", args.video)

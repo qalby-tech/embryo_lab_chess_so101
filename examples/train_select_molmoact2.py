@@ -71,7 +71,8 @@ def evaluate(args, checkpoint: str) -> dict:
          "--checkpoint", checkpoint, "--episodes", str(args.eval_episodes),
          "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
          "--dataset-root", args.root]
-        + (["--moves", args.moves] if args.moves else []),
+        + (["--moves", args.moves] if args.moves else [])
+        + (["--interpolate"] if args.interpolate else []),
         capture_output=True, text=True)
     sys.stdout.write(out.stdout[-2000:])
     match = re.search(r"(\d+)/(\d+) successes; median placement error ([\d.]+) mm", out.stdout)
@@ -122,6 +123,8 @@ def main():
     ap.add_argument("--eval-episodes", type=int, default=6)
     ap.add_argument("--moves", default=None,
                     help="score only these UCI moves, for a narrow-task run")
+    ap.add_argument("--interpolate", action="store_true",
+                    help="ramp between the policy's targets when scoring")
     ap.add_argument("--eval-seed", type=int, default=100)
     ap.add_argument("--eval-max-steps", type=int, default=300)
     args = ap.parse_args()

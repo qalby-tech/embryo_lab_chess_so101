@@ -54,24 +54,26 @@ def _spare_pieces(board: chess.Board, square: int) -> list[chess.Piece]:
 
 
 def position_with_move(rng: random.Random, extra_pieces: int, move: chess.Move,
-                       attempts: int = 40) -> chess.Board | None:
-    """A random sparse position in which `move` is available: a piece to pick on
-    the source square, nothing on the target. Used to train and score a narrow
-    task, where the move is fixed and only the rest of the board varies."""
+                       attempts: int = 60) -> chess.Board | None:
+    """A random sparse position in which `move` is legal for the side to move:
+    a piece to pick on the source square, nothing on the target. Which piece
+    goes on the source square is chosen so the move is legal - a pawn cannot
+    move backwards, so a far-rank move needs a piece that can make it."""
     for _ in range(attempts):
         board = random_position(rng, extra_pieces)
         if board.king(chess.WHITE) in (move.from_square, move.to_square) or \
                 board.king(chess.BLACK) in (move.from_square, move.to_square):
             continue
         board.remove_piece_at(move.to_square)
-        piece = board.piece_at(move.from_square)
-        if piece is None:
-            spare = _spare_pieces(board, move.from_square)
-            if not spare:
-                continue
-            board.set_piece_at(move.from_square, rng.choice(spare))
-        if board.is_valid():
-            return board
+        board.remove_piece_at(move.from_square)
+        board.turn = chess.WHITE
+        spare = [p for p in _spare_pieces(board, move.from_square) if p.color == chess.WHITE]
+        rng.shuffle(spare)
+        for piece in spare:
+            board.set_piece_at(move.from_square, piece)
+            if board.is_valid() and move in board.legal_moves:
+                return board
+            board.remove_piece_at(move.from_square)
     return None
 
 
