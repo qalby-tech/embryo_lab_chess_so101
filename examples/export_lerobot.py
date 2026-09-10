@@ -64,7 +64,8 @@ def episode_dirs(root: str) -> list[str]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--in", dest="source", required=True, help="recorded dataset directory")
+    ap.add_argument("--in", dest="source", required=True, nargs="+",
+                    help="recorded dataset directories; several are merged into one dataset")
     ap.add_argument("--repo-id", default="local/chess_so101")
     ap.add_argument("--root", required=True, help="output directory for the LeRobot dataset")
     ap.add_argument("--convention", choices=["so101", "radians"], default="so101")
@@ -89,7 +90,7 @@ def main():
         raise SystemExit("--stride must be at least 1")
 
     convert = to_so101_degrees if args.convention == "so101" else (lambda v: v)
-    sources = episode_dirs(args.source)
+    sources = [d for root in args.source for d in episode_dirs(root)]
     if not sources:
         raise SystemExit(f"no recorded episodes under {args.source}")
 
@@ -166,6 +167,9 @@ def main():
     dataset.finalize()
     print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} unreadable "
           f"recordings skipped) to {args.root}")
+    for root in args.source:
+        n = sum(1 for d in sources if d.startswith(root))
+        print(f"  from {root}: {n} recordings")
     print(f"cameras {CAMERAS} at {width}x{height}, {fps} fps "
           f"(recorded {recorded_fps}, stride {args.stride}), convention {args.convention}")
 
