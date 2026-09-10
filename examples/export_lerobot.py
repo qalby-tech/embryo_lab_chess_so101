@@ -22,6 +22,7 @@ them (shoulder_lift and elbow_flex are mirrored about 90 degrees). Use
 import argparse
 import json
 import os
+import time
 
 import imageio.v2 as imageio
 import numpy as np
@@ -29,6 +30,7 @@ import numpy as np
 from lerobot.configs.video import VideoEncoderConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+RETRIES = 3
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 CAMERAS = ["top", "wrist"]
 # radians -> SO-100/101 dataset degrees: value * sign * 180/pi + offset
@@ -127,23 +129,42 @@ def main():
             continue
         data = np.load(os.path.join(path, "data.npz"))
         states, actions = data["observation_state"], data["action"]
-        readers = {cam: imageio.get_reader(os.path.join(path, f"{cam}.mp4")) for cam in CAMERAS}
-        frames = min(len(states), len(actions), *(r.count_frames() for r in readers.values()))
-        for i in range(0, frames, args.stride):
-            frame = {"observation.state": convert(states[i]).astype(np.float32),
-                     "action": convert(actions[i]).astype(np.float32),
-                     "task": meta["instruction"]}
-            for cam, reader in readers.items():
-                frame[f"observation.images.{cam}"] = reader.get_data(i)
-            dataset.add_frame(frame)
-        for reader in readers.values():
-            reader.close()
+        # Opening a video can fail transiently when the encoder is loaded, so a
+        # failure is retried before the episode is written off as unreadable -
+        # silently dropping sound recordings would thin the data unnoticed.
+        for attempt in range(RETRIES):
+            readers = {}
+            try:
+                for cam in CAMERAS:
+                    readers[cam] = imageio.get_reader(os.path.join(path, f"{cam}.mp4"))
+                frames = min(len(states), len(actions), *(r.count_frames() for r in readers.values()))
+                for i in range(0, frames, args.stride):
+                    frame = {"observation.state": convert(states[i]).astype(np.float32),
+                             "action": convert(actions[i]).astype(np.float32),
+                             "task": meta["instruction"]}
+                    for cam, reader in readers.items():
+                        frame[f"observation.images.{cam}"] = reader.get_data(i)
+                    dataset.add_frame(frame)
+                break
+            except (OSError, ValueError, RuntimeError, IndexError) as err:
+                dataset.clear_episode_buffer()
+                if attempt + 1 < RETRIES:
+                    print(f"  retrying {path}: {err}", flush=True)
+                    time.sleep(2)
+                else:
+                    print(f"  skipping {path}: {err}", flush=True)
+            finally:
+                for reader in readers.values():
+                    reader.close()
+        else:
+            damaged += 1
+            continue
         dataset.save_episode()
         exported += 1
         if exported % 25 == 0:
             print(f"  {exported} episodes exported", flush=True)
     dataset.finalize()
-    print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} incomplete "
+    print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} unreadable "
           f"recordings skipped) to {args.root}")
     print(f"cameras {CAMERAS} at {width}x{height}, {fps} fps "
           f"(recorded {recorded_fps}, stride {args.stride}), convention {args.convention}")
