@@ -73,24 +73,33 @@ class PickPlaceController:
     # -- public --------------------------------------------------------------
 
     def pick_place(self, slot: PieceSlot, target_xy: tuple[float, float],
-                   on_step: StepCallback | None = None) -> bool:
+                   on_step: StepCallback | None = None,
+                   source_z: float | None = None, target_z: float | None = None) -> bool:
         """Move `slot`'s piece so its axis stands on `target_xy`. True if all
-        waypoints executed within tolerance (final outcome is verified by env)."""
+        waypoints executed within tolerance (final outcome is verified by env).
+
+        `source_z` / `target_z` are the surfaces the piece is lifted from and set
+        down on, defaulting to the board. They matter: the discard tray stands on
+        the table, a board's thickness lower, and a piece released at board
+        height there falls the difference and topples."""
         env, board, g = self.env, self.env.board_spec, slot.geometry
         px, py, _ = env.piece_position(slot)
         plan = grasp_plan(g, board)
         z_grasp, gap_open, gap_hold = plan.z_grasp, plan.gap_open, plan.gap_hold
+        lift = z_grasp - board.top                      # grasp height above the surface
+        source_z = board.top if source_z is None else source_z
+        target_z = board.top if target_z is None else target_z
         off_open, off_hold = plan.off_open, plan.off_hold
         gap_release, off_release = gap_open, off_open
-        grasp_pt = np.array([px, py, z_grasp])
-        place_pt = np.array([target_xy[0], target_xy[1], z_grasp])
+        grasp_pt = np.array([px, py, source_z + lift])
+        place_pt = np.array([target_xy[0], target_xy[1], target_z + lift])
         span_grasp = env.grasp_span(grasp_pt, off_open, exclude=slot)
         span_place = env.grasp_span(place_pt, off_hold, exclude=slot)
         ok = True
 
         # approach the piece along the tool axis, close, let the clamp build
         self._span = span_grasp
-        self._go(np.array([px, py, board.top + TRANSIT]), gap_open, off_open, 22, on_step)
+        self._go(np.array([px, py, max(board.top, source_z) + TRANSIT]), gap_open, off_open, 22, on_step)
         approach = self._approach_axis(grasp_pt, off_open)
         self._go(grasp_pt - approach * APPROACH_LENGTH, gap_open, off_open, 14, on_step)
         ok &= self._descend(grasp_pt, gap_open, off_open, approach, on_step)
@@ -126,7 +135,7 @@ class PickPlaceController:
         # would sweep a prong through the piece
         self._go(place_pt, gap_release, off_hold, 8, on_step)
         self._go(place_pt, gap_release, off_release, 6, on_step)
-        clear_pt = np.array([target_xy[0], target_xy[1], board.top + g.height + 0.03])
+        clear_pt = np.array([target_xy[0], target_xy[1], target_z + g.height + 0.03])
         self._line(place_pt, clear_pt, gap_release, off_release, on_step, segments=4)
         self._go(np.array([target_xy[0], target_xy[1], board.top + TRANSIT]), gap_open, off_open, 10, on_step)
         return bool(ok)

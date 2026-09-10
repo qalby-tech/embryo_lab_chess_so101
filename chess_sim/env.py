@@ -283,7 +283,8 @@ class ChessSimEnv:
         before = {s: self.piece_position(sl)[:2] for s, sl in self._square_slot.items()}
         start_steps = self._step_count
 
-        executed = self.controller.pick_place(slot, self.board_spec.square_center(dst), on_step)
+        executed = self.controller.pick_place(slot, self.board_spec.square_center(dst), on_step,
+                                              source_z=self.board_spec.table_top)
         for _ in range(int(0.3 * self.control_hz)):
             self.apply_action(self._current_action(), on_step)
 
@@ -330,7 +331,8 @@ class ChessSimEnv:
         before = {s: self.piece_position(sl)[:2] for s, sl in self._square_slot.items()}
         start_steps = self._step_count
 
-        executed = self.controller.pick_place(slot, target, on_step)
+        executed = self.controller.pick_place(slot, target, on_step,
+                                              target_z=self.board_spec.table_top)
         for _ in range(int(0.3 * self.control_hz)):
             self.apply_action(self._current_action(), on_step)
 
