@@ -92,19 +92,29 @@ def better(candidate: dict, best: dict | None) -> bool:
 
 
 def checkpoints(out: str) -> list[str]:
-    """Step directories holding a complete checkpoint. A run killed mid-save
-    leaves a partial one behind, which must not be mistaken for progress."""
+    """Step directories holding a checkpoint a run can resume from. A session
+    killed mid-save leaves a partial one behind: the files exist but the
+    optimizer state is missing and the step is never written, so existence
+    alone does not show progress and must not be resumed from."""
     root = os.path.join(out, "checkpoints")
     if not os.path.isdir(root):
         return []
     complete = []
     for d in sorted(x for x in os.listdir(root) if x.isdigit()):
-        weights = os.path.join(root, d, "pretrained_model", "model.safetensors")
-        state = os.path.join(root, d, "training_state", "training_step.json")
-        if os.path.exists(weights) and os.path.exists(state):
-            complete.append(d)
-        else:
+        state = os.path.join(root, d, "training_state")
+        needed = [os.path.join(root, d, "pretrained_model", "model.safetensors"),
+                  os.path.join(state, "optimizer_state.safetensors"),
+                  os.path.join(state, "training_step.json")]
+        try:
+            if not all(os.path.getsize(f) for f in needed):
+                raise OSError("empty file")
+            with open(needed[-1]) as f:
+                json.load(f)["step"]
+        except (OSError, ValueError, KeyError):
+            print(f"discarding partial checkpoint {d}", flush=True)
             shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+            continue
+        complete.append(d)
     return complete
 
 
