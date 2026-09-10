@@ -77,6 +77,13 @@ def position_with_move(rng: random.Random, extra_pieces: int, move: chess.Move,
     return None
 
 
+def describe_capture(square: str) -> str:
+    """The instruction for taking a piece off the board. Like describe(), it
+    names a square rather than a piece, so executing it needs no chess
+    knowledge and no piece recognition - only the destination differs."""
+    return f"take the piece on {square} off the board"
+
+
 def describe(board: chess.Board, move: chess.Move) -> str:
     """The instruction given to a policy: purely spatial, so executing it needs
     no chess knowledge and no piece-type recognition. Which move to play is the
