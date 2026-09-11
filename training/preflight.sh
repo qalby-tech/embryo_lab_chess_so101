@@ -26,6 +26,26 @@ else
 fi
 
 echo
+echo "=== 2b. WSL driver libraries match the installed driver ==="
+if [ -d /usr/lib/wsl/lib ]; then
+  # WSL copies these from the Windows driver at VM boot and never again, so a
+  # driver update does nothing until wsl --shutdown. Comparing the library's
+  # date with the boot time catches the case where someone updated the driver
+  # and expected it to take effect.
+  libdate=$(stat -c %Y /usr/lib/wsl/lib/libnvidia-gpucomp.so 2>/dev/null || echo 0)
+  boot=$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))
+  if [ "$libdate" -gt 0 ] && [ "$libdate" -lt "$boot" ]; then
+    echo "note: driver libraries predate this boot ($(date -d @$libdate '+%Y-%m-%d'))."
+    echo "      that is normal, unless the driver was updated since - in which"
+    echo "      case run 'wsl --shutdown' so WSL picks the new one up."
+  else
+    echo "ok: driver libraries refreshed at this boot"
+  fi
+else
+  echo "not WSL, skipping"
+fi
+
+echo
 echo "=== 3. a single process can reserve what training needs ==="
 PY=${PYTHON:-python3}
 $PY - <<'PYEOF'
