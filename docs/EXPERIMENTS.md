@@ -288,6 +288,28 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   ffmpeg could not read; the same file exported cleanly on the next run. Skipping unreadable
   episodes silently would thin the data unnoticed, so each gets three attempts before being
   dropped and counted.
+- **A corrupt GPU driver library, mistaken for a memory problem.** Training began failing
+  with CUDA out-of-memory on a job that had run the day before unchanged. The numbers never
+  made sense - 4.60 GiB requested with 12.34 GiB free, later 22 MiB requested with 8.73 GiB
+  free - and the failure always landed in the optimizer step. Eliminated by direct test, in
+  this order: the dataset (the previous one failed identically), edits to the training script
+  (reverting to the committed code failed too), batch size and gradient accumulation (failed
+  at micro-batch 2), LoRA rank (failed at 32), `expandable_segments` (verified present in the
+  process, no effect), a WSL restart, and a full Windows reboot. A container reached 30 GiB
+  where the host capped at 27, so the run was moved into one - where it then *hung* twice at
+  different steps, the trainer spinning at 106% CPU in `futex_wait` while the GPU held 30 GB
+  at 2% utilization.
+
+  The answer was in `dmesg` the whole time: `file /usr/lib/wsl/lib/libnvidia-gpucomp.so is
+  truncated`, alongside 108 instances of `misc dxg: dxgk: dxgkio_escape: Ioctl failed: -22`.
+  WSL mounts that compute library from the Windows driver; a truncated copy explains the
+  impossible allocation failures, the hangs, and why the container did better (the NVIDIA
+  container runtime injects its own copies rather than using the host's). Remedy is a clean
+  reinstall of the Windows driver, not any change to the training configuration.
+
+  The lesson is cheap to state and was expensive to learn: when a job that worked yesterday
+  fails today with numbers that do not add up, read the kernel log before tuning anything.
+
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
 
