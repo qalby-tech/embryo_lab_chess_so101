@@ -13,16 +13,20 @@ nvidia-smi --query-gpu=name,driver_version,memory.total,memory.used --format=csv
 
 echo
 echo "=== 2. kernel log clean of driver faults ==="
-bad=$(dmesg 2>/dev/null | grep -ciE "is truncated|dxgkio_escape|Xid |gpu has fallen" || true)
+# dxgkio_escape failures are NOT included: nvidia-smi emits them on every run
+# under WSL and they rise only when nvidia-smi is called, never from actual CUDA
+# work. Treating them as faults blocks a perfectly healthy machine.
+bad=$(dmesg 2>/dev/null | grep -ciE "is truncated|Xid |gpu has fallen" || true)
 if [ "${bad:-0}" -gt 0 ]; then
   echo "FAIL: $bad driver fault lines in dmesg:"
-  dmesg 2>/dev/null | grep -iE "is truncated|dxgkio_escape|Xid |gpu has fallen" | tail -5
-  echo "  -> a truncated NVIDIA library or failing GPU ioctls will surface as"
-  echo "     out-of-memory errors and hangs. Reinstall the GPU driver (on WSL,"
-  echo "     a clean reinstall of the Windows driver) before training."
+  dmesg 2>/dev/null | grep -iE "is truncated|Xid |gpu has fallen" | tail -5
+  echo "  -> a truncated NVIDIA library surfaces as out-of-memory errors with"
+  echo "     gigabytes free, and as hangs with the GPU idle holding memory."
+  echo "     Reinstall the GPU driver (on WSL, a clean reinstall of the Windows"
+  echo "     driver, then wsl --shutdown) before training."
   fail=1
 else
-  echo "ok: no truncated libraries, no GPU ioctl failures"
+  echo "ok: no truncated libraries, no Xid errors"
 fi
 
 echo
