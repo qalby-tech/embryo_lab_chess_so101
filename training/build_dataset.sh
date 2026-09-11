@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source training/settings.env
-PY=${PYTHON:-python}
+PY=${PYTHON:-$(command -v python || command -v python3)}   # a venv has "python"; a bare host may not
 EPISODES_MOVE=${EPISODES_MOVE:-5000}
 EPISODES_CAPTURE=${EPISODES_CAPTURE:-1200}
 EPISODES_RESTORE=${EPISODES_RESTORE:-1200}

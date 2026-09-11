@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 source training/settings.env
-PY=${PYTHON:-python}
+PY=${PYTHON:-$(command -v python || command -v python3)}   # a venv has "python"; a bare host may not
 
 [ -f "$DATASET_ROOT/.export-complete" ] || {
   echo "dataset $DATASET_ROOT is not finished - run training/build_dataset.sh first"
