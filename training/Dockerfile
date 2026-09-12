@@ -25,7 +25,10 @@ RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch
 ARG LEROBOT_COMMIT=2774d9bddcbbda50e697e162e89e7eaada8d7105
 RUN git clone https://github.com/huggingface/lerobot.git /opt/lerobot \
     && cd /opt/lerobot && git checkout $LEROBOT_COMMIT \
-    && pip install --no-cache-dir -e ".[molmoact2]" || pip install --no-cache-dir -e .
+    && pip install --no-cache-dir -e ".[molmoact2,dataset,training]"
+# Without [dataset] the trainer dies at startup with "'datasets' is required but not
+# installed" while torch, lerobot and the GPU all check out. There is deliberately no
+# fallback install: a bare `pip install -e .` would hide exactly that.
 
 RUN pip install --no-cache-dir \
         "transformers==5.5.4" "accelerate==1.14.0" "peft==0.20.0" \
