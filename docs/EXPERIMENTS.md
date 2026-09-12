@@ -310,6 +310,25 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   The lesson is cheap to state and was expensive to learn: when a job that worked yesterday
   fails today with numbers that do not add up, read the kernel log before tuning anything.
 
+- **GPU resets that look like hangs.** With the driver library repaired, training still froze
+  at random steps - 259, 908, 1,085, 2,430 - and on the old four-move dataset at 185. Every
+  freeze had the same shape: the trainer at ~100% CPU in `futex_wait`, the GPU at idle clocks
+  (247 MHz, 29 W, 0% utilization) while still holding its memory. None of batch 8 vs 4 with
+  accumulation, 4 dataloader workers vs 0, host vs container, or the full vs the old dataset
+  changed it. The Windows System log had the answer: `nvlddmkm` event 153 (level Error) six
+  times in twelve hours, at the times runs died - the driver resetting the GPU under sustained
+  load, which leaves the CUDA context waiting on work the device no longer has. Nothing appears
+  in `dmesg` under WSL; look in the Windows event log. Mitigations adopted: checkpoints every
+  500 steps instead of 2,000, and a stall detector that alerts when the step counter stops for
+  8 minutes, because a process that is alive and holding memory is not evidence of training.
+
+- **An environment that checks out but cannot train.** After a disk cleanup deleted the
+  virtualenv, Miniforge and the Hugging Face cache, the rebuilt environment passed every
+  hardware check - torch with CUDA, 31 GiB allocatable, a clean kernel log - and the trainer
+  died on its first import: LeRobot had been reinstalled without its `[dataset]` extra.
+  Install `lerobot[molmoact2,dataset,training]`; `training/preflight.sh` now imports the
+  dataset stack and the policy, so this is caught before a run starts.
+
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
 
