@@ -52,12 +52,18 @@ fi
 echo
 echo "=== 3. a single process can reserve what training needs ==="
 PY=${PYTHON:-python3}
+# A missing interpreter or a missing torch must fail the preflight: once, the
+# training virtualenv had been deleted and this check was silently skipped, so
+# the script reported "passed" on a machine that could not train at all.
+if ! command -v "$PY" >/dev/null 2>&1 && [ ! -x "$PY" ]; then
+  echo "FAIL: interpreter $PY not found"; fail=1
+else
 $PY - <<'PYEOF'
 import sys
 try:
     import torch
 except ImportError:
-    print("SKIP: torch not importable here"); sys.exit(0)
+    print("FAIL: torch not importable with this interpreter"); sys.exit(1)
 if not torch.cuda.is_available():
     print("FAIL: torch cannot see the GPU"); sys.exit(1)
 free, total = torch.cuda.mem_get_info()
@@ -72,6 +78,8 @@ print(f"largest cumulative allocation: {gib} GiB")
 # training peaks near 30 GB at batch 8; 27 GiB was the symptom of a sick driver
 print("ok" if gib >= 30 else "WARNING: under 30 GiB, batch 8 will not fit")
 PYEOF
+[ $? -eq 0 ] || fail=1
+fi
 
 echo
 [ $fail -eq 0 ] && echo "preflight passed" || echo "preflight FAILED - fix the above before training"

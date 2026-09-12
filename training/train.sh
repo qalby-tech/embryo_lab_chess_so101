@@ -17,7 +17,9 @@ ulimit -n 65536 2>/dev/null || true
 exec $PY -u examples/train_select_molmoact2.py \
   --root "$DATASET_ROOT" --repo-id "$REPO_ID" --out "$OUTPUT_DIR" \
   --total-steps "$TOTAL_STEPS" --block "$BLOCK" \
-  --batch-size "$BATCH_SIZE" --eval-episodes "$EVAL_EPISODES" \
+  --batch-size "$BATCH_SIZE" --grad-accum "${GRAD_ACCUM:-1}" \
+  --num-workers "${NUM_WORKERS:-4}" \
+  --eval-episodes "$EVAL_EPISODES" \
   --eval-max-steps "$EVAL_MAX_STEPS" \
   $([ "${INTERPOLATE:-1}" = "1" ] && echo --interpolate) \
   "$@"

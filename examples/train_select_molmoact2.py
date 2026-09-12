@@ -28,7 +28,8 @@ import sys
 import time
 
 BEST = "best.json"
-SAVE_EVERY = 2000   # checkpoint within a block: a killed session then loses an hour, not the block
+SAVE_EVERY = 500    # the GPU resets under load (nvlddmkm 153), killing the run at
+                    # random steps; checkpointing often keeps each reset cheap
 
 
 def train_block(args, resume: bool, steps_target: int) -> None:
@@ -57,6 +58,14 @@ def train_block(args, resume: bool, steps_target: int) -> None:
         "--policy.gradient_checkpointing=true",
         "--policy.normalize_gripper=true", "--policy.push_to_hub=false", "--wandb.enable=false",
         f"--batch_size={args.batch_size}", f"--steps={steps_target}",
+        # Same effective batch at a fraction of the activation memory. Running at
+        # 94% of a 32 GB card left the WSL driver no headroom, and the GPU hung
+        # with its memory held and nothing executing.
+        f"--accelerator.gradient_accumulation.steps={args.grad_accum}",
+        # Loading in worker processes deadlocked the run at random steps: the
+        # trainer spinning in futex, the workers polling, and the GPU holding its
+        # memory with nothing executing. 0 loads in the training process itself.
+        f"--num_workers={args.num_workers}",
         f"--save_freq={min(SAVE_EVERY, args.block)}", "--env_eval_freq=-1",
         f"--output_dir={args.out}",
     ]
@@ -129,6 +138,9 @@ def main():
     # measured; 4000 steps keeps that overhead near 13% of the run
     ap.add_argument("--block", type=int, default=4000)
     ap.add_argument("--batch-size", type=int, default=8)
+    ap.add_argument("--num-workers", type=int, default=4)
+    ap.add_argument("--grad-accum", type=int, default=1,
+                    help="micro-batches per optimizer step")
     ap.add_argument("--train-mode-vlm", default="lora")
     ap.add_argument("--eval-episodes", type=int, default=6)
     ap.add_argument("--moves", default=None,
