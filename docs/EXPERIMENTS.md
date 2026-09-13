@@ -402,6 +402,36 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
 
+- **Pieces passed through the board.** A recording from the final evaluation showed a piece
+  pushed down into the board and out of sight. Measured on the scene as it stood: a 10 N
+  push on an upright pawn sank it 41 mm - through the 12 mm board and into the table - and
+  the real gripper driven 10 mm onto a rook's top sank it 18 mm. The mechanism is MuJoCo's
+  soft contact: with impedance `d` the constraint cancels only a `d` share of the pushing
+  acceleration, and the rest has to be balanced by the penetration-proportional term. At the
+  default 0.9-0.95 that leaves 5-10% of the push unopposed, harmless for a kilogram and fatal
+  for a 1 g piece, which is 1,000 g of acceleration under 10 N. Three fixes were measured on
+  the same push, press and 24 identical scripted episodes per family:
+  explicit stiffness (`solref = (-1e5, -1e3)`) flung every piece in every episode, idle
+  pieces drifting 640 mm; a 5 ms time constant on every geom held 5 N to 0.8 mm but
+  tunnelled at 10 N (-20 mm); near-unit impedance `(0.999, 0.9999)` on the board and table
+  only, given `priority=1` so their setting wins against the pieces, holds 5-20 N to
+  0.3-0.7 mm and the gripper press to 0.6 mm with no change to piece-piece or pad-piece
+  contact. Making pieces 5x heavier changed nothing at any setting. An upright push of 30 N
+  still tunnels - at 1 g that is 60 mm of travel in one 2 ms step, before any contact can
+  act - but no servo in the arm can deliver it: the press test peaked at 15-40 N *total*
+  contact force including the jaw squeeze.
+- **Stiffer contact exposed a burial bug in `displace()`.** Every stiff variant failed 1-4
+  of 24 scripted restores that the old contact passed, all with the piece hundreds of mm
+  from its square. Tracing one: the loose piece was never picked up because it was lying
+  on its side before the arm arrived. `displace()` set the piece's body origin - its centre,
+  21 mm above its base - at table height, so every loose piece started 21 mm inside the
+  table. Soft contact oozed it out over five steps; near-rigid contact ejected it and it
+  toppled. `reset()` had always placed pieces through `_place()`, which subtracts the base
+  offset; `displace()` now does too. Consequence for the data: all 1,191 restore episodes in
+  the published dataset open with the loose piece rising out of the table, which the policy
+  saw at every restore start. With both fixes: 24/24 moves, 24/24 captures, 24/24 restores
+  on the identical episodes, medians 0.9 / 1.4 / 1.1 mm against 0.9 / 1.3 / 0.9 mm before.
+
 ---
 
 ## 8. Open questions

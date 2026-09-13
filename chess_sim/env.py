@@ -254,9 +254,14 @@ class ChessSimEnv:
         if slot is None:
             return None
         piece = self.board.remove_piece_at(src)
-        quat = (0.7071, 0.0, 0.7071, 0.0) if topple else (1.0, 0.0, 0.0, 0.0)
-        z = self.board_spec.table_top + (slot.geometry.collider_radius if topple else 0.0)
-        self.set_piece_pose(slot, (float(xy[0]), float(xy[1]), z), quat, zero_velocity=True)
+        if topple:
+            z = self.board_spec.table_top + slot.geometry.collider_radius
+            self.set_piece_pose(slot, (float(xy[0]), float(xy[1]), z), (0.7071, 0.0, 0.7071, 0.0),
+                                zero_velocity=True)
+        else:
+            # standing on the surface, as at reset - the body origin is the
+            # piece's centre, not its base, so table height alone buries it
+            self._place(slot, float(xy[0]), float(xy[1]), self.board_spec.table_top)
         # qpos alone is not the simulation state: without a forward pass the
         # piece is still reported at its old square, and the controller would
         # reach for a square the piece has left.

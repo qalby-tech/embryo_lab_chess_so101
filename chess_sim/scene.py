@@ -43,6 +43,18 @@ class PieceSlot:
     geometry: PieceGeometry
 
 
+# Contact impedance of the surfaces pieces stand on. MuJoCo's soft contact
+# leaves a (1 - impedance) share of the pushing acceleration unopposed, and with
+# the default 0.9-0.95 a 1 g piece under a 10 N press sinks 40 mm: through the
+# board, into the table (a 10 mm gripper press alone drove a rook 18 mm down).
+# Near-unit impedance on the board and table, which outrank the pieces so their
+# setting is used, holds the same press to 0.6 mm. Explicit stiffness (negative
+# solref) is unusable at this mass - it flings every piece - and a shorter time
+# constant on every geom tunnels at 10 N.
+SURFACE_SOLIMP = (0.999, 0.9999, 0.001, 0.5, 2.0)
+SURFACE_PRIORITY = 1
+
+
 def piece_slots(board: BoardSpec, piece_scale: float = 1.0) -> list[PieceSlot]:
     """The fixed set of piece bodies, in a stable order."""
     slots = []
@@ -160,7 +172,8 @@ def _add_environment(spec, board, appearance):
     # table and arm pedestal
     spec.worldbody.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX,
                             size=[0.36, 0.30, board.table_top / 2],
-                            pos=[0, 0, board.table_top / 2], rgba=[*appearance.table_rgb, 1])
+                            pos=[0, 0, board.table_top / 2], rgba=[*appearance.table_rgb, 1],
+                            solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
     ax, ay, az = board.arm_base
     if board.arm_riser > 0:
         spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -176,7 +189,8 @@ def _add_board(spec, board, texture_file):
     spec.worldbody.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
                             size=[board.width / 2, board.width / 2, board.thickness / 2],
                             pos=[0, 0, board.table_top + board.thickness / 2],
-                            material="board_mat")
+                            material="board_mat",
+                            solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
 
 
 def _add_pieces(spec, board, appearance):
