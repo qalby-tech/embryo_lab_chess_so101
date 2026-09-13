@@ -340,6 +340,21 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   accumulation 2, and LeRobot counts micro-batches as steps, so step 42,000 was only 0.28 epochs.
   Size `scheduler_decay_steps` to the run, and budget in samples as well as steps.
 
+- **The far side of the board fails, and the obvious reasons are not why.** Across five
+  evaluations of the full run (steps 13K-53K, the same 16 positions each time), five positions
+  never succeeded once: h7->h6, g6->g7, h7->h8, a7->c6, a5->a6. Their source squares average
+  276 mm from the arm base, against 174 mm for the six positions that succeeded at least 3 of 5
+  times; move length is the same in both groups (35 vs 34 mm). Four explanations were measured
+  and ruled out. Coverage: the never-solved squares appear in 182 training episodes on average
+  against 202 for solved ones. Expert quality: the scripted expert succeeds on 97-100% of
+  recordings from every rank, median error 0.8-1.0 mm. Perception: a rank-7 square is 42.0 px
+  wide in the overhead camera against 44.7 px on rank 2 (0.94x). Kinematic amplification: a
+  1-degree error in the worst joint moves the fingertip 4.7 mm near the base and 4.8 mm far
+  away (1.01x). Not ruled out: the base joints' own sensitivity roughly triples with reach
+  (pan 1.7 -> 4.9 mm/deg, lift 2.8 -> 5.0) while the elbow's falls (4.7 -> 3.6), so a policy
+  whose errors sit in pan and lift would still degrade with distance. Next test: compare the
+  policy's joint commands with the expert's, joint by joint, on these five positions.
+
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
 
