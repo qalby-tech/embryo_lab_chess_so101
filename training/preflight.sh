@@ -87,8 +87,8 @@ echo "=== 4. the training stack imports ==="
 # import: a rebuilt environment once lacked LeRobot's [dataset] extra, passed
 # every check above, and failed at startup with "'datasets' is required".
 if command -v "$PY" >/dev/null 2>&1 || [ -x "$PY" ]; then
-  if $PY -c "import datasets, peft, accelerate, lerobot.datasets.lerobot_dataset; from lerobot.policies.molmoact2.modeling_molmoact2 import MolmoAct2Policy" 2>/tmp/preflight_import.err; then
-    echo "ok: lerobot dataset stack and MolmoAct2 policy import"
+  if $PY -c "import datasets, peft, accelerate, imageio_ffmpeg, lerobot.datasets.lerobot_dataset; from lerobot.policies.molmoact2.modeling_molmoact2 import MolmoAct2Policy" 2>/tmp/preflight_import.err; then
+    echo "ok: lerobot dataset stack, video writer and MolmoAct2 policy import"
   else
     echo "FAIL: training imports broken:"; grep -E "Error" /tmp/preflight_import.err | tail -2
     echo "  -> install lerobot with extras: pip install -e 'lerobot[molmoact2,dataset,training]'"

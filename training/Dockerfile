@@ -32,7 +32,7 @@ RUN git clone https://github.com/huggingface/lerobot.git /opt/lerobot \
 
 RUN pip install --no-cache-dir \
         "transformers==5.5.4" "accelerate==1.14.0" "peft==0.20.0" \
-        "numpy==2.2.6" "imageio==2.37.4" "av==15.1.0" "safetensors==0.8.0" \
+        "numpy==2.2.6" "imageio[ffmpeg]==2.37.4" "av==15.1.0" "safetensors==0.8.0" \
         "mujoco>=3.10,<3.13" "mink>=1.3,<2" chess trimesh "qpsolvers[daqp]" huggingface_hub
 
 WORKDIR /workspace
