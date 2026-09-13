@@ -114,6 +114,45 @@ but brushed a neighbouring piece; one genuinely missed (54.1 mm).
 
 The run was stopped here at the user's request; it is resumable from step 6,000.
 
+### 4.5 Full run - moves, captures and restores, 7,343 episodes
+
+MolmoAct2 from the base checkpoint on all three families (4,956 moves, 1,196 captures, 1,191
+restores). After step 3,000 the run resumed from a checkpoint saved at micro-batch 4 with
+accumulation 2, so steps count micro-batches of 4. Interpolated execution throughout. Every
+10,000 steps it was evaluated on the same 16 random move positions (seed 100):
+
+| step | successes | median error | untouched | knocked / fell | learning-rate decay |
+| --- | --- | --- | --- | --- | --- |
+| 13,000 | 3/16 | 53.9 mm | 4 | 9 | 54% |
+| 23,000 | 6/16 | 20.5 mm | 5 | 3 | 96% |
+| 33,000 | 5/16 | 20.2 mm | 5 | 3 | floor |
+| 43,000 | 5/16 | 28.6 mm | 5 | 4 | floor |
+| 53,000 | 7/16 | 24.6 mm | 3 | 5 | floor |
+
+Stopped at step ~57,400 (0.28 epochs). Final evaluation of step 57,000, seed 100, 300 control
+steps per episode:
+
+| family | episodes | successes | named piece engaged | median error |
+| --- | --- | --- | --- | --- |
+| moves | 32 | **15/32 (47%)** | not measured | 12.9 mm |
+| captures | 16 | **9/16 (56%)** | 10/16 | 7.4 mm |
+| restores | 16 | **1/16 (6%)** | 2/16 | 157.5 mm |
+
+- On the 16 comparison positions step 57,000 scored 6/16, level with every checkpoint since
+  23,000: the steps trained at the floor learning rate bought nothing measurable. The 16 new
+  positions scored 9/16, so the comparison set is harder than average.
+- Captures that engaged the piece nearly all succeeded, placing it 2.0-8.0 mm from its tray slot
+  (tolerance 30 mm, looser than a move's 11 mm, so the rates are not comparable). Six of the seven
+  failures were the named piece never being moved.
+- Restores fail the same way, far more often: the loose piece was moved in 2 of 16 episodes.
+  Two explanations were measured and ruled out. The horizon: restore expert episodes run a
+  median 256 control steps with 8% over the 300 allowed, the same as moves (11%). Visibility:
+  loose pieces project to u = 23-127 px in the 640 px overhead image, none clipped, and the tray
+  where captures succeed sits at u = 79, inside that range. Restores are the one family whose
+  instruction does not name the source square; the policy did not learn to find the piece.
+- Across all three families the dominant failure is the policy never engaging the named piece,
+  not mishandling it once grasped.
+
 ---
 
 ## 5. Findings
@@ -354,6 +393,11 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   (pan 1.7 -> 4.9 mm/deg, lift 2.8 -> 5.0) while the elbow's falls (4.7 -> 3.6), so a policy
   whose errors sit in pan and lift would still degrade with distance. Next test: compare the
   policy's joint commands with the expert's, joint by joint, on these five positions.
+  Correction after the final evaluation: 16 further positions at step 57,000 included far-side
+  successes - b8->c6, its source 313 mm from the base, placed at 4.8 mm, and e7->d7 at 277 mm -
+  so distance alone does not predict failure. Individual positions also swing widely between
+  checkpoints (b6->c7 succeeded three evaluations running, then missed by 618 mm). The five
+  positions above still failed, but the conclusion drawn from them was too strong.
 
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
