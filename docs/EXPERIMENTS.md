@@ -329,6 +329,17 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   Install `lerobot[molmoact2,dataset,training]`; `training/preflight.sh` now imports the
   dataset stack and the policy, so this is caught before a run starts.
 
+- **A learning-rate schedule sized for someone else's run.** The full run's evaluations went
+  3/16 at step 13,000, 6/16 at 23,000, then 5/16 at 33,000 and 5/16 at 43,000, with the loss
+  flat at 0.49-0.55 from step 27,000. MolmoAct2's default scheduler is a cosine decay over a
+  fixed `scheduler_decay_steps: 24000`, independent of `--steps`. The action-expert learning
+  rate reached its floor of 5.0e-06 at step ~24,000 and stayed there: 54% decayed at the
+  13,000 evaluation, 96% at 23,000, 100% at every one after. Both runs that worked finished well
+  above the floor - rung 0 at 50% of the decay, rung 1 at 58% - so no successful run had ever
+  trained at it. A second factor halved the data: the resumed run inherited micro-batch 4 with
+  accumulation 2, and LeRobot counts micro-batches as steps, so step 42,000 was only 0.28 epochs.
+  Size `scheduler_decay_steps` to the run, and budget in samples as well as steps.
+
 - **Killing processes by pattern.** `pkill -f <pattern>` repeatedly matched and killed the
   wrapper shells doing the killing. List PIDs first, then kill explicit numeric PIDs.
 
