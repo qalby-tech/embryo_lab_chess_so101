@@ -1,4 +1,4 @@
-"""Demonstrate taking pieces off the board and putting loose ones back.
+"""Demonstrate taking pieces off the board.
 
     python examples/play_captures.py --viewer            # live, real time
     python examples/play_captures.py                     # writes sim/out/captures.mp4
@@ -8,9 +8,6 @@ lifted into the discard tray on the arm's left, and only then does the capturing
 piece move onto the square it just vacated. The same scripted expert and the
 same mink IK solve both halves - a capture is an ordinary pick-and-place whose
 destination is off the board.
-
-The demo ends by knocking a piece off its square and putting it back, which is
-the other thing an arm has to do when a real game goes wrong.
 
 `--viewer` needs a display (WSLg on WSL2 is fine).
 """
@@ -95,20 +92,7 @@ def main():
         pause()
         done += taken.success and moved.success
 
-    # and the other direction: a piece knocked off its square, put back
-    knocked = "c6"
-    slot = env.displace(knocked, (-0.16, 0.06))
-    print(f"knocked {knocked} off the board")
-    pause()
-    if slot is not None:
-        back = env.restore(slot, knocked, on_step=record)
-        print(f"put it back on {knocked}:            {'ok' if back.success else 'FAILED'} "
-              f"({back.placement_error * 1000:.1f} mm"
-              f"{', ' + back.reason if back.reason else ''})")
-        done += back.success
-    pause()
-
-    print(f"{done}/{len(CAPTURES) + 1} sequences completed; final position: {env.board.board_fen()}")
+    print(f"{done}/{len(CAPTURES)} sequences completed; final position: {env.board.board_fen()}")
     if writer is not None:
         writer.close()
         print("wrote", args.out)

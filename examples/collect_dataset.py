@@ -25,9 +25,7 @@ import chess
 import numpy as np
 
 from chess_sim import Appearance, ChessSimEnv, EpisodeRecorder
-from chess_sim.controller import grasp_plan
-from play_random_moves import (describe, describe_capture, describe_restore,
-                               position_with_move, random_position)
+from play_random_moves import describe, describe_capture, position_with_move, random_position
 
 
 def collect(out: str, episodes: int, seed: int, randomize: bool, image_size,
@@ -45,39 +43,6 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size,
     for i in range(episodes):
         if randomize and i > 0:
             env.recolor(Appearance.random(looks))
-        if task == "restore":
-            # a piece knocked out of play, to be put back where it belongs
-            placed = None
-            for _ in range(20):
-                board = random_position(rng, rng.randint(2, 8))
-                env.reset(board.board_fen())
-                options = [sq for sq in env._square_slot if sq in env.reach.squares
-                           and env.board.piece_at(sq).piece_type != chess.KING]
-                if not options:
-                    continue
-                square = chess.square_name(rng.choice(options))
-                slot = env.displace(square, env.board_spec.loose_position(rng))
-                if slot is None:
-                    continue
-                plan = grasp_plan(slot.geometry, env.board_spec)
-                here = env.piece_position(slot)
-                point = np.array([here[0], here[1],
-                                  env.board_spec.table_top + plan.z_grasp - env.board_spec.top])
-                if env.grasp_span(point, plan.off_open, exclude=slot) is None:
-                    continue          # the arm could not take hold of it there
-                placed = (slot, square)
-                break
-            if placed is None:
-                continue
-            slot, square = placed
-            recorder.begin(describe_restore(square), fen=env.board.fen(), move=f"r{square}",
-                           task="restore",
-                           appearance=env.appearance.__dict__ if randomize else None)
-            result = env.restore(slot, square, on_step=recorder.on_step)
-            recorder.end(result.success, placement_error=result.placement_error,
-                         disturbed=result.disturbed, reason=result.reason)
-            successes += result.success
-            continue
         if task == "capture":
             while True:
                 board = random_position(rng, rng.randint(2, 8))
@@ -135,8 +100,8 @@ def main():
     ap.add_argument("--randomize", action="store_true", help="random appearance per episode")
     ap.add_argument("--image-size", type=int, nargs=2, default=(640, 480), metavar=("W", "H"))
     ap.add_argument("--chunk", type=int, default=25, help="episodes per worker process")
-    ap.add_argument("--task", choices=["move", "capture", "restore"], default="move",
-                    help="ordinary moves, pieces taken off the board, or loose pieces put back")
+    ap.add_argument("--task", choices=["move", "capture"], default="move",
+                    help="ordinary moves, or pieces taken off the board")
     ap.add_argument("--moves", default=None,
                     help="comma-separated UCI moves to record instead of random ones, e.g. e2e4,d7d5")
     ap.add_argument("--out", default="datasets/chess")

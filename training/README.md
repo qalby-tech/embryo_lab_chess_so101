@@ -11,14 +11,12 @@ executes one instruction per episode against a simulated board:
 
 | family | instruction | share of the dataset |
 | --- | --- | --- |
-| move | `pick up the piece on e2 and place it on e4` | 4,956 episodes (67%) |
-| capture | `take the piece on d5 off the board` | 1,196 (16%) |
-| restore | `put the loose piece on e4` | 1,191 (16%) |
+| move | `pick up the piece on e2 and place it on e4` | 5,000 episodes (81%) |
+| capture | `take the piece on d5 off the board` | 1,200 (19%) |
 
 Instructions are deliberately spatial: executing one needs no chess knowledge,
 so a chess engine can choose the move and the policy only has to carry it out.
-The restore family is the exception in one respect — it does not name the source
-square, so the policy has to find a piece that could be anywhere off the board.
+Every instruction names its source square, so nothing has to be searched for.
 
 Success is the rule the scripted expert is held to: the piece ends within
 **11 mm** of the target square, upright, nothing else displaced.
@@ -100,9 +98,12 @@ container; elsewhere the driver's own EGL is enough.
   the full 1,380. The full run has not completed; the evaluation metric to watch
   is **right-piece rate on unseen instructions**, which every evaluation
   measures for free because positions are drawn at random.
-- Restoring a piece that has fallen **on its side**. Laying one down works;
-  picking it up does not — the grasp planner assumes a standing cylinder, and
-  standing one up needs the IK tilt cone relaxed. This is mechanical work, not
-  perception.
-- Instructions that name a piece by type, which need several loose pieces to be
-  distinguishable and therefore actual recognition.
+- **Loose pieces** — a piece knocked over or off its square during play. A
+  third family, `put the loose piece on e4`, was collected and trained once
+  (1,191 episodes; 1/16 at evaluation against 15/32 moves and 9/16 captures)
+  and then dropped: it is a visual search task the other two are not, and the
+  scripted expert cannot pick up a piece lying on its side (standing one up
+  needs the IK tilt cone relaxed and a regrasp). The plan is a magnetic board
+  so pieces do not get knocked over in the first place; if the task returns,
+  the instruction has to name the piece type, since several may be loose at
+  once, and that needs actual recognition.

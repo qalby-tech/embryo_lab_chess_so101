@@ -77,14 +77,6 @@ def position_with_move(rng: random.Random, extra_pieces: int, move: chess.Move,
     return None
 
 
-def describe_restore(square: str) -> str:
-    """The instruction for putting a piece that is off the board back where it
-    belongs. The source is not named - there is one loose piece and the policy
-    has to find it - so this is the first instruction whose starting point must
-    be located rather than read."""
-    return f"put the loose piece on {square}"
-
-
 def describe_capture(square: str) -> str:
     """The instruction for taking a piece off the board. Like describe(), it
     names a square rather than a piece, so executing it needs no chess

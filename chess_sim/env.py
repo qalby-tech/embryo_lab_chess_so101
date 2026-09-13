@@ -81,7 +81,6 @@ class ChessSimEnv:
                           for s in self.slots}
         self._square_slot: dict[int, PieceSlot] = {}
         self._captured: list[PieceSlot] = []
-        self._loose: list[tuple[PieceSlot, chess.Piece]] = []
 
         self.ik = So101Ik(self.model, build_arm(board_spec).compile(), prefix=ARM_PREFIX)
         self._joint_qpos = np.array([self.model.jnt_qposadr[mujoco.mj_name2id(
@@ -111,7 +110,6 @@ class ChessSimEnv:
         self.board = position
         self._square_slot = {}
         self._captured = []
-        self._loose = []
         pool = {s.body: s for s in self.slots}
         for square, piece in position.piece_map().items():
             slot = next((s for s in pool.values() if s.piece == piece), None)
@@ -219,9 +217,9 @@ class ChessSimEnv:
                           self._step_count - start_steps, reason, waypoints_precise=bool(executed))
 
     def active_slots(self) -> list[PieceSlot]:
-        """Every piece the arm has to work around: those on squares, those
-        loose on the table, and those already in the discard tray."""
-        return list(self._square_slot.values()) + [sl for sl, _ in self._loose] + self._captured
+        """Every piece the arm has to work around: those on squares and
+        those already in the discard tray."""
+        return list(self._square_slot.values()) + self._captured
 
     def executable_captures(self) -> list[int]:
         """Squares whose piece the arm can lift and set down in the tray."""
@@ -239,77 +237,6 @@ class ChessSimEnv:
                     and self.grasp_span(dst, plan.off_hold, exclude=slot) is not None):
                 out.append(square)
         return out
-
-    # -- pieces that are not on a square -------------------------------------
-
-    def displace(self, square: str, xy, topple: bool = False) -> PieceSlot | None:
-        """Take the piece off `square` and leave it loose on the table at `xy`.
-
-        Models what happens when a piece is knocked over or pushed off the
-        board: it is no longer on any square, and an instruction that wants it
-        back has to name the piece rather than a square. `topple` lays it on its
-        side, which the scripted grasp cannot yet pick up - see restore()."""
-        src = parse_square(square)
-        slot = self._square_slot.pop(src, None)
-        if slot is None:
-            return None
-        piece = self.board.remove_piece_at(src)
-        if topple:
-            z = self.board_spec.table_top + slot.geometry.collider_radius
-            self.set_piece_pose(slot, (float(xy[0]), float(xy[1]), z), (0.7071, 0.0, 0.7071, 0.0),
-                                zero_velocity=True)
-        else:
-            # standing on the surface, as at reset - the body origin is the
-            # piece's centre, not its base, so table height alone buries it
-            self._place(slot, float(xy[0]), float(xy[1]), self.board_spec.table_top)
-        # qpos alone is not the simulation state: without a forward pass the
-        # piece is still reported at its old square, and the controller would
-        # reach for a square the piece has left.
-        mujoco.mj_forward(self.model, self.data)
-        for _ in range(int(0.4 * self.control_hz)):    # let it come to rest
-            self.apply_action(self._current_action())
-        self._loose.append((slot, piece))
-        return slot
-
-    @property
-    def loose_pieces(self) -> list[tuple[PieceSlot, chess.Piece]]:
-        """Pieces lying off their squares, with what they are."""
-        return list(self._loose)
-
-    def restore(self, slot: PieceSlot, square: str,
-                on_step: Callable[[np.ndarray], None] | None = None) -> MoveResult:
-        """Put a loose piece back on `square`, scored like an ordinary move."""
-        dst = parse_square(square)
-        entry = next((e for e in self._loose if e[0] is slot), None)
-        if entry is None:
-            return MoveResult("loose", square, False, 0.0, [], 0, "piece is not loose")
-        if dst in self._square_slot:
-            return MoveResult("loose", square, False, 0.0, [], 0, "target square occupied")
-        before = {s: self.piece_position(sl)[:2] for s, sl in self._square_slot.items()}
-        start_steps = self._step_count
-
-        executed = self.controller.pick_place(slot, self.board_spec.square_center(dst), on_step,
-                                              source_z=self.board_spec.table_top)
-        for _ in range(int(0.3 * self.control_hz)):
-            self.apply_action(self._current_action(), on_step)
-
-        pos = self.piece_position(slot)
-        tx, ty = self.board_spec.square_center(dst)
-        error = float(np.hypot(pos[0] - tx, pos[1] - ty))
-        upright = self.piece_upright(slot) > UPRIGHT_MIN
-        disturbed = [chess.square_name(s) for s, xy in before.items()
-                     if np.linalg.norm(self.piece_position(self._square_slot[s])[:2] - xy)
-                     > DISTURB_TOLERANCE]
-        success = error < PLACEMENT_TOLERANCE and upright and not disturbed
-        if error < PLACEMENT_TOLERANCE and upright:
-            self._loose.remove(entry)
-            self._square_slot[dst] = slot
-            self.board.set_piece_at(dst, entry[1])
-        return MoveResult("loose", square, bool(success), error, disturbed,
-                          self._step_count - start_steps,
-                          "" if success else "placement error" if error >= PLACEMENT_TOLERANCE
-                          else "piece fell" if not upright else "disturbed other pieces",
-                          waypoints_precise=bool(executed))
 
     def free_capture_slot(self) -> tuple[float, float] | None:
         """The next unused discard position, or None once the tray is full."""

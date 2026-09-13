@@ -19,10 +19,6 @@ CAPTURE_TRAY_Y0 = -0.10
 CAPTURE_TRAY_PITCH = 0.04
 CAPTURE_TRAY_SLOTS = 4
 
-# Where a piece knocked out of play can end up. A strip on the arm's left: far
-# enough out to be off the board, inside the overhead camera's frame, and clear
-# of both the camera mast and the parked pieces on the right.
-LOOSE_AREA = (-0.195, -0.130, -0.110, 0.050)   # x min/max, y min/max
 FILES = "abcdefgh"
 
 
@@ -59,15 +55,6 @@ class BoardSpec:
         """World x/y of a python-chess square index (0 = a1 ... 63 = h8)."""
         f, r = chess.square_file(square), chess.square_rank(square)
         return (f - 3.5) * self.square, (r - 3.5) * self.square
-
-    def loose_position(self, rng) -> tuple[float, float]:
-        """A random spot for a piece that has been knocked out of play.
-
-        Anywhere in a strip rather than one of a few fixed slots: an
-        instruction that does not name the source square is only a test of
-        finding the piece if the piece could be anywhere."""
-        x0, x1, y0, y1 = LOOSE_AREA
-        return rng.uniform(x0, x1), rng.uniform(y0, y1)
 
     def capture_slot(self, index: int) -> tuple[float, float]:
         """Where a piece taken off the board is set down.

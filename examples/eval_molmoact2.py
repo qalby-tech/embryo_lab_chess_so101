@@ -22,11 +22,9 @@ import numpy as np
 import torch
 
 from chess_sim import ChessSimEnv
-from chess_sim.controller import grasp_plan
 from chess_sim.env import CAPTURE_TOLERANCE, DISTURB_TOLERANCE, PLACEMENT_TOLERANCE, UPRIGHT_MIN
 from export_lerobot import CAMERAS, JOINT_OFFSETS, JOINT_SIGNS, to_so101_degrees
-from play_random_moves import (describe, describe_capture, describe_restore,
-                               position_with_move, random_position)
+from play_random_moves import describe, describe_capture, position_with_move, random_position
 
 
 def to_radians(degrees: np.ndarray) -> np.ndarray:
@@ -62,7 +60,6 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
                 index: int = 0, task: str = "move") -> dict:
     """One instructed move under policy control; returns the outcome."""
     source = None
-    loose_start = None
     if task == "capture":
         # the named piece has to leave the board for the discard tray
         while True:
@@ -77,28 +74,6 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
         slot = env.slot_at(name)
         target = np.array(env.board_spec.capture_slot(0))
         label = f"x{name}"
-    elif task == "restore":
-        # one piece lies loose off the board; it has to go back to the named square
-        while True:
-            board = random_position(rng, rng.randint(2, 8))
-            env.reset(board.board_fen())
-            options = [sq for sq in env._square_slot if sq in env.reach.squares
-                       and env.board.piece_at(sq).piece_type != chess.KING]
-            if not options:
-                continue
-            square = rng.choice(options)
-            slot = env.displace(chess.square_name(square), env.board_spec.loose_position(rng))
-            if slot is None:
-                continue
-            plan = grasp_plan(slot.geometry, env.board_spec)
-            here = env.piece_position(slot)
-            point = np.array([here[0], here[1], env.board_spec.table_top + plan.z_grasp - env.board_spec.top])
-            if env.grasp_span(point, plan.off_open, exclude=slot) is not None:
-                break
-        instruction = describe_restore(chess.square_name(square))
-        target = np.array(env.board_spec.square_center(square))
-        label = f"r{chess.square_name(square)}"
-        loose_start = env.piece_position(slot)[:2].copy()
     else:
         while True:
             if moves:   # score the narrow task the policy was trained on, each move equally often
@@ -158,11 +133,6 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
         success = off_board and error < CAPTURE_TOLERANCE and upright and not disturbed
         right_piece = float(np.linalg.norm(position[:2] - before[source])) > DISTURB_TOLERANCE
         picked = chess.square_name(source) if right_piece else None
-    elif task == "restore":
-        success = error < PLACEMENT_TOLERANCE and upright and not disturbed
-        # only one piece is loose, so finding it means moving it off the spot it lay on
-        right_piece = float(np.linalg.norm(position[:2] - loose_start)) > DISTURB_TOLERANCE
-        picked = chess.square_name(square) if right_piece else None
     else:
         # Which piece actually moved. With several moves in play, going to the wrong
         # square is a failure of grounding and needs telling apart from a clumsy
@@ -188,7 +158,7 @@ def main():
     ap.add_argument("--max-steps", type=int, default=400, help="control steps per episode")
     ap.add_argument("--dataset-root", default=None,
                     help="training dataset, read for the rate the policy emits targets at")
-    ap.add_argument("--task", choices=["move", "capture", "restore"], default="move",
+    ap.add_argument("--task", choices=["move", "capture"], default="move",
                     help="which instruction family to score")
     ap.add_argument("--moves", default=None,
                     help="comma-separated UCI moves to score instead of random ones")

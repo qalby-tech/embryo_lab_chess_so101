@@ -441,7 +441,10 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
 2. **What step budget does the full dataset need?** §5.4 says count steps, not epochs. The
    failed runs stopped at 6,000–10,000; rung 1 was already working at 8,000 with four
    instructions.
-3. **Piece identity.** Every instruction so far names a square. Recovering a piece that is off
-   the board requires naming the piece instead — a recognition capability never yet exercised.
+3. **Piece identity.** Every instruction names a square. The restore family (`put the loose
+   piece on e4`) was the one exception, dropped on 2026-09-14 after scoring 1/16: a visual search
+   the other families are not, and a magnetic board removes most of the need. Recovering a
+   knocked-over piece properly would need the piece named by type - recognition never yet
+   exercised - and a grasp for a piece lying on its side.
 4. **Sim-to-real geometry.** Board square size, camera height and field of view must match the
    physical rig, or none of this transfers.

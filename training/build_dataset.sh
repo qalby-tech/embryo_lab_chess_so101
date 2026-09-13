@@ -1,5 +1,5 @@
 #!/bin/bash
-# Record the three instruction families and export them as one LeRobot dataset.
+# Record both instruction families and export them as one LeRobot dataset.
 # Skip the collection steps if datasets/chess_* already hold the recordings.
 set -e
 cd "$(dirname "$0")/.."
@@ -7,7 +7,6 @@ source training/settings.env
 PY=${PYTHON:-$(command -v python || command -v python3)}   # a venv has "python"; a bare host may not
 EPISODES_MOVE=${EPISODES_MOVE:-5000}
 EPISODES_CAPTURE=${EPISODES_CAPTURE:-1200}
-EPISODES_RESTORE=${EPISODES_RESTORE:-1200}
 WORKERS=${WORKERS:-4}
 
 # One scene per worker process and a fresh process per chunk: every scene
@@ -20,12 +19,11 @@ collect () {   # task, episodes, out
 }
 collect move    "$EPISODES_MOVE"    datasets/chess_vla2
 collect capture "$EPISODES_CAPTURE" datasets/chess_capture
-collect restore "$EPISODES_RESTORE" datasets/chess_restore
 
 # Only verified successes are exported; ~99% of recordings qualify.
 rm -rf "$DATASET_ROOT"
 $PY -u examples/export_lerobot.py \
-    --in datasets/chess_vla2 datasets/chess_capture datasets/chess_restore \
+    --in datasets/chess_vla2 datasets/chess_capture \
     --repo-id "$REPO_ID" --root "$DATASET_ROOT" \
     --stride "$STRIDE" --encoder-threads 8
 touch "$DATASET_ROOT/.export-complete"
