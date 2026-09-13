@@ -19,7 +19,7 @@ exec $PY -u examples/train_select_molmoact2.py \
   --total-steps "$TOTAL_STEPS" --block "$BLOCK" \
   --batch-size "$BATCH_SIZE" --grad-accum "${GRAD_ACCUM:-1}" \
   --num-workers "${NUM_WORKERS:-4}" \
-  --eval-episodes "$EVAL_EPISODES" \
+  --eval-episodes "$EVAL_EPISODES" --eval-captures "${EVAL_CAPTURES:-0}" \
   --eval-max-steps "$EVAL_MAX_STEPS" \
   $([ "${INTERPOLATE:-1}" = "1" ] && echo --interpolate) \
   "$@"

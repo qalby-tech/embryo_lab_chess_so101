@@ -37,13 +37,15 @@ training/train_docker.sh           # or self-contained in a container
 ```
 
 `train.sh` resumes from the last complete checkpoint, so re-running it after any
-interruption continues rather than restarts. Checkpoints land every 2,000 steps
+interruption continues rather than restarts. Checkpoints land every 500 steps
 in `outputs/molmoact2_full/checkpoints/`; the loop keeps the best and the newest
 and deletes the rest.
 
 Or skip collection entirely and pull the published dataset:
 `https://huggingface.co/datasets/XvKuoMing/so101_chess` (7,343 episodes,
-609,097 frames, 1,380 instructions, 10 fps, 18 GB).
+609,097 frames, 1,380 instructions, 10 fps, 18 GB). It still holds the
+1,191 dropped restore episodes, recorded with the loose piece starting buried in
+the table; filter them out (instructions starting `put the loose piece`).
 
 ## Results so far, as sanity references
 
@@ -53,7 +55,7 @@ If a fresh environment reproduces these, it is set up correctly.
 | --- | --- | --- | --- |
 | one move (`e2e4`) | 300 eps | 12,000 | **16/16**, median 2.1 mm |
 | four moves | 800 eps | 8,000 | **13/16**, right piece 14/16 |
-| all instructions | 7,343 eps | — | not yet run to completion |
+| moves, captures, restores | 7,343 eps | 57,000 (0.28 epochs) | moves **15/32**, captures **9/16**, restores 1/16 |
 
 Two findings matter more than any hyperparameter:
 

@@ -58,6 +58,10 @@ def train_block(args, resume: bool, steps_target: int) -> None:
         "--policy.gradient_checkpointing=true",
         "--policy.normalize_gripper=true", "--policy.push_to_hub=false", "--wandb.enable=false",
         f"--batch_size={args.batch_size}", f"--steps={steps_target}",
+        # MolmoAct2 decays its learning rate over a fixed 24,000 steps whatever
+        # --steps says; the first full run spent everything past that at the
+        # floor. A resumed block inherits this from the saved config.
+        f"--policy.scheduler_decay_steps={args.total_steps}",
         # Same effective batch at a fraction of the activation memory. Running at
         # 94% of a 32 GB card left the WSL driver no headroom, and the GPU hung
         # with its memory held and nothing executing.
@@ -74,22 +78,37 @@ def train_block(args, resume: bool, steps_target: int) -> None:
 
 
 def evaluate(args, checkpoint: str) -> dict:
-    """Closed-loop success rate of `checkpoint` on held-out positions."""
-    out = subprocess.run(
-        [os.path.expanduser("~/vla/venv/bin/python"), "examples/eval_molmoact2.py",
-         "--checkpoint", checkpoint, "--episodes", str(args.eval_episodes),
-         "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
-         "--dataset-root", args.root]
-        + (["--moves", args.moves] if args.moves else [])
-        + (["--interpolate"] if args.interpolate else []),
-        capture_output=True, text=True)
-    sys.stdout.write(out.stdout[-2000:])
-    match = re.search(r"(\d+)/(\d+) successes; median placement error ([\d.]+) mm", out.stdout)
-    if not match:
-        print("evaluation produced no score:", out.stderr[-600:])
-        return {"successes": -1, "episodes": args.eval_episodes, "median_mm": float("inf")}
-    return {"successes": int(match.group(1)), "episodes": int(match.group(2)),
-            "median_mm": float(match.group(3))}
+    """Closed-loop success of `checkpoint` on held-out positions, summed over the
+    instruction families scored. Each family is its own evaluation process, one
+    after the other: two copies of the policy do not fit in memory at once."""
+    families = {"move": args.eval_episodes}
+    if args.eval_captures:
+        families["capture"] = args.eval_captures
+    score = {"successes": 0, "episodes": 0, "median_mm": 0.0, "families": {}}
+    for task, episodes in families.items():
+        out = subprocess.run(
+            [os.path.expanduser("~/vla/venv/bin/python"), "examples/eval_molmoact2.py",
+             "--checkpoint", checkpoint, "--task", task, "--episodes", str(episodes),
+             "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
+             "--dataset-root", args.root]
+            + (["--moves", args.moves] if args.moves and task == "move" else [])
+            + (["--interpolate"] if args.interpolate else []),
+            capture_output=True, text=True)
+        sys.stdout.write(out.stdout[-2000:])
+        match = re.search(r"(\d+)/(\d+) successes; median placement error ([\d.]+) mm", out.stdout)
+        if not match:
+            print(f"{task} evaluation produced no score:", out.stderr[-600:])
+            return {"successes": -1, "episodes": sum(families.values()), "median_mm": float("inf"),
+                    "families": score["families"]}
+        found = {"successes": int(match.group(1)), "episodes": int(match.group(2)),
+                 "median_mm": float(match.group(3))}
+        score["families"][task] = found
+        score["successes"] += found["successes"]
+        score["episodes"] += found["episodes"]
+        score["median_mm"] += found["median_mm"] * found["episodes"]
+    # the families' medians, weighted by episodes: a tie-breaker, not a statistic
+    score["median_mm"] /= max(score["episodes"], 1)
+    return score
 
 
 def better(candidate: dict, best: dict | None) -> bool:
@@ -142,7 +161,9 @@ def main():
     ap.add_argument("--grad-accum", type=int, default=1,
                     help="micro-batches per optimizer step")
     ap.add_argument("--train-mode-vlm", default="lora")
-    ap.add_argument("--eval-episodes", type=int, default=6)
+    ap.add_argument("--eval-episodes", type=int, default=6, help="move episodes per evaluation")
+    ap.add_argument("--eval-captures", type=int, default=0,
+                    help="capture episodes per evaluation, scored alongside the moves")
     ap.add_argument("--moves", default=None,
                     help="score only these UCI moves, for a narrow-task run")
     ap.add_argument("--interpolate", action="store_true",
@@ -167,7 +188,9 @@ def main():
         checkpoint = os.path.join(args.out, "checkpoints", tag, "pretrained_model")
         score = evaluate(args, checkpoint)
         score.update(step=int(tag), minutes=round((time.time() - started) / 60, 1))
-        print(f"step {tag}: {score['successes']}/{score['episodes']} successes, "
+        families = ", ".join(f"{t} {f['successes']}/{f['episodes']}"
+                             for t, f in score.get("families", {}).items())
+        print(f"step {tag}: {score['successes']}/{score['episodes']} successes ({families}), "
               f"median {score['median_mm']:.1f} mm ({score['minutes']} min)", flush=True)
 
         if better(score, best):
