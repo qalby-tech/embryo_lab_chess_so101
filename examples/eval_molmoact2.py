@@ -22,9 +22,11 @@ import numpy as np
 import torch
 
 from chess_sim import ChessSimEnv
-from chess_sim.env import DISTURB_TOLERANCE, PLACEMENT_TOLERANCE, UPRIGHT_MIN
+from chess_sim.controller import grasp_plan
+from chess_sim.env import CAPTURE_TOLERANCE, DISTURB_TOLERANCE, PLACEMENT_TOLERANCE, UPRIGHT_MIN
 from export_lerobot import CAMERAS, JOINT_OFFSETS, JOINT_SIGNS, to_so101_degrees
-from play_random_moves import describe, position_with_move, random_position
+from play_random_moves import (describe, describe_capture, describe_restore,
+                               position_with_move, random_position)
 
 
 def to_radians(degrees: np.ndarray) -> np.ndarray:
@@ -57,28 +59,69 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
                 hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False,
-                index: int = 0) -> dict:
+                index: int = 0, task: str = "move") -> dict:
     """One instructed move under policy control; returns the outcome."""
-    while True:
-        if moves:   # score the narrow task the policy was trained on, each move equally often
-            move = chess.Move.from_uci(moves[index % len(moves)])
-            board = position_with_move(rng, rng.randint(2, 8), move)
-            if board is None:
-                continue
-            env.reset(board.board_fen())
-            if move in env.executable_moves():
-                break
-        else:
+    source = None
+    loose_start = None
+    if task == "capture":
+        # the named piece has to leave the board for the discard tray
+        while True:
             board = random_position(rng, rng.randint(2, 8))
             env.reset(board.board_fen())
-            candidates = env.executable_moves()
-            if candidates:
-                move = rng.choice(candidates)
+            targets = env.executable_captures()
+            if targets:
+                source = rng.choice(targets)
                 break
-    instruction = describe(env.board, move)
-    slot = env.slot_at(chess.square_name(move.from_square))
+        name = chess.square_name(source)
+        instruction = describe_capture(name)
+        slot = env.slot_at(name)
+        target = np.array(env.board_spec.capture_slot(0))
+        label = f"x{name}"
+    elif task == "restore":
+        # one piece lies loose off the board; it has to go back to the named square
+        while True:
+            board = random_position(rng, rng.randint(2, 8))
+            env.reset(board.board_fen())
+            options = [sq for sq in env._square_slot if sq in env.reach.squares
+                       and env.board.piece_at(sq).piece_type != chess.KING]
+            if not options:
+                continue
+            square = rng.choice(options)
+            slot = env.displace(chess.square_name(square), env.board_spec.loose_position(rng))
+            if slot is None:
+                continue
+            plan = grasp_plan(slot.geometry, env.board_spec)
+            here = env.piece_position(slot)
+            point = np.array([here[0], here[1], env.board_spec.table_top + plan.z_grasp - env.board_spec.top])
+            if env.grasp_span(point, plan.off_open, exclude=slot) is not None:
+                break
+        instruction = describe_restore(chess.square_name(square))
+        target = np.array(env.board_spec.square_center(square))
+        label = f"r{chess.square_name(square)}"
+        loose_start = env.piece_position(slot)[:2].copy()
+    else:
+        while True:
+            if moves:   # score the narrow task the policy was trained on, each move equally often
+                move = chess.Move.from_uci(moves[index % len(moves)])
+                board = position_with_move(rng, rng.randint(2, 8), move)
+                if board is None:
+                    continue
+                env.reset(board.board_fen())
+                if move in env.executable_moves():
+                    break
+            else:
+                board = random_position(rng, rng.randint(2, 8))
+                env.reset(board.board_fen())
+                candidates = env.executable_moves()
+                if candidates:
+                    move = rng.choice(candidates)
+                    break
+        instruction = describe(env.board, move)
+        source = move.from_square
+        slot = env.slot_at(chess.square_name(source))
+        target = np.array(env.board_spec.square_center(move.to_square))
+        label = move.uci()
     before = {sq: env.piece_position(sl)[:2].copy() for sq, sl in env._square_slot.items()}
-    target = np.array(env.board_spec.square_center(move.to_square))
 
     preprocess, postprocess = processors
     policy.reset()
@@ -106,21 +149,35 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
     error = float(np.linalg.norm(position[:2] - target))
     upright = env.piece_upright(slot) > UPRIGHT_MIN
     disturbed = [chess.square_name(sq) for sq, xy in before.items()
-                 if sq != move.from_square
+                 if sq != source
                  and np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy) > DISTURB_TOLERANCE]
-    # Which piece actually moved. With several moves in play, going to the wrong
-    # square is a failure of grounding and needs telling apart from a clumsy
-    # grasp of the right one.
-    shifted = {sq: float(np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy))
-               for sq, xy in before.items()}
-    picked = max(shifted, key=shifted.get) if shifted else None
-    if picked is None or shifted[picked] < DISTURB_TOLERANCE:
-        picked = None
-    return {"move": move.uci(), "instruction": instruction, "placement_error": error,
-            "upright": upright, "disturbed": disturbed,
-            "picked": chess.square_name(picked) if picked is not None else None,
-            "right_piece": picked == move.from_square,
-            "success": bool(error < PLACEMENT_TOLERANCE and upright and not disturbed)}
+    if task == "capture":
+        # the scripted rule: off the board, in its tray slot, standing, nothing else touched
+        field = env.board_spec.field / 2
+        off_board = abs(position[0]) > field or abs(position[1]) > field
+        success = off_board and error < CAPTURE_TOLERANCE and upright and not disturbed
+        right_piece = float(np.linalg.norm(position[:2] - before[source])) > DISTURB_TOLERANCE
+        picked = chess.square_name(source) if right_piece else None
+    elif task == "restore":
+        success = error < PLACEMENT_TOLERANCE and upright and not disturbed
+        # only one piece is loose, so finding it means moving it off the spot it lay on
+        right_piece = float(np.linalg.norm(position[:2] - loose_start)) > DISTURB_TOLERANCE
+        picked = chess.square_name(square) if right_piece else None
+    else:
+        # Which piece actually moved. With several moves in play, going to the wrong
+        # square is a failure of grounding and needs telling apart from a clumsy
+        # grasp of the right one.
+        shifted = {sq: float(np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy))
+                   for sq, xy in before.items()}
+        moved = max(shifted, key=shifted.get) if shifted else None
+        if moved is None or shifted[moved] < DISTURB_TOLERANCE:
+            moved = None
+        right_piece = moved == source
+        picked = chess.square_name(moved) if moved is not None else None
+        success = error < PLACEMENT_TOLERANCE and upright and not disturbed
+    return {"move": label, "task": task, "instruction": instruction, "placement_error": error,
+            "upright": upright, "disturbed": disturbed, "picked": picked,
+            "right_piece": bool(right_piece), "success": bool(success)}
 
 
 def main():
@@ -131,6 +188,8 @@ def main():
     ap.add_argument("--max-steps", type=int, default=400, help="control steps per episode")
     ap.add_argument("--dataset-root", default=None,
                     help="training dataset, read for the rate the policy emits targets at")
+    ap.add_argument("--task", choices=["move", "capture", "restore"], default="move",
+                    help="which instruction family to score")
     ap.add_argument("--moves", default=None,
                     help="comma-separated UCI moves to score instead of random ones")
     ap.add_argument("--interpolate", action="store_true",
@@ -165,7 +224,7 @@ def main():
     successes, errors, outcomes = 0, [], []
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
-                              record, hold, moves, args.interpolate, i)
+                              record, hold, moves, args.interpolate, i, args.task)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         outcomes.append(outcome)
@@ -176,7 +235,7 @@ def main():
               flush=True)
     print(f"{successes}/{args.episodes} successes; median placement error "
           f"{np.median(errors) * 1000:.1f} mm")
-    if moves:
+    if moves or args.task != "move":
         right = sum(o["right_piece"] for o in outcomes)
         print(f"picked the named piece in {right}/{len(outcomes)} episodes")
         for uci in moves:
