@@ -57,14 +57,14 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
                 hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False,
-                index: int = 0, task: str = "move") -> dict:
+                index: int = 0, task: str = "move", jitter: bool = True) -> dict:
     """One instructed move under policy control; returns the outcome."""
     source = None
     if task == "capture":
         # the named piece has to leave the board for the discard tray
         while True:
             board = random_position(rng, rng.randint(2, 8))
-            env.reset(board.board_fen())
+            env.reset(board.board_fen(), rng=rng if jitter else None)
             targets = env.executable_captures()
             if targets:
                 source = rng.choice(targets)
@@ -81,12 +81,12 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
                 board = position_with_move(rng, rng.randint(2, 8), move)
                 if board is None:
                     continue
-                env.reset(board.board_fen())
+                env.reset(board.board_fen(), rng=rng if jitter else None)
                 if move in env.executable_moves():
                     break
             else:
                 board = random_position(rng, rng.randint(2, 8))
-                env.reset(board.board_fen())
+                env.reset(board.board_fen(), rng=rng if jitter else None)
                 candidates = env.executable_moves()
                 if candidates:
                     move = rng.choice(candidates)
@@ -128,8 +128,7 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
                  and np.linalg.norm(env.piece_position(env._square_slot[sq])[:2] - xy) > DISTURB_TOLERANCE]
     if task == "capture":
         # the scripted rule: off the board, in its tray slot, standing, nothing else touched
-        field = env.board_spec.field / 2
-        off_board = abs(position[0]) > field or abs(position[1]) > field
+        off_board = not env.board_spec.on_field(position[:2])
         success = off_board and error < CAPTURE_TOLERANCE and upright and not disturbed
         right_piece = float(np.linalg.norm(position[:2] - before[source])) > DISTURB_TOLERANCE
         picked = chess.square_name(source) if right_piece else None
@@ -164,6 +163,8 @@ def main():
                     help="comma-separated UCI moves to score instead of random ones")
     ap.add_argument("--interpolate", action="store_true",
                     help="ramp between the policy's targets instead of stepping to each")
+    ap.add_argument("--nominal-layout", action="store_true",
+                    help="board and arm start exactly in place, instead of shifted as in training")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
@@ -194,7 +195,8 @@ def main():
     successes, errors, outcomes = 0, [], []
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
-                              record, hold, moves, args.interpolate, i, args.task)
+                              record, hold, moves, args.interpolate, i, args.task,
+                              not args.nominal_layout)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         outcomes.append(outcome)

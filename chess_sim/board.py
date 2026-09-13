@@ -2,7 +2,8 @@
 
 The board is procedural: a bordered slab with an 8x8 checker texture, so every
 square center is an exact analytic coordinate in the world frame. The board
-center is the world origin in x/y; the arm sits on the -y side (white's side).
+center sits at `BoardSpec.origin` in x/y - the world origin unless the board has
+been shifted - and the arm sits on the -y side (white's side).
 """
 from __future__ import annotations
 
@@ -32,6 +33,9 @@ class BoardSpec:
     table_top: float = 0.43        # table height above the floor
     arm_gap: float = 0.08          # distance from board edge to arm base center
     arm_riser: float = 0.06        # pedestal height under the arm base
+    # where the board's centre sits on the table; the arm, camera mast, tray and
+    # parked pieces do not move with it
+    origin: tuple[float, float] = (0.0, 0.0)
 
     @property
     def field(self) -> float:
@@ -48,13 +52,19 @@ class BoardSpec:
 
     @property
     def arm_base(self) -> tuple[float, float, float]:
-        """World position of the SO-101 base frame."""
+        """World position of the SO-101 base frame. Independent of `origin`:
+        shifting the board moves it relative to the arm."""
         return (0.0, -(self.width / 2 + self.arm_gap), self.table_top + self.arm_riser)
 
     def square_center(self, square: int) -> tuple[float, float]:
         """World x/y of a python-chess square index (0 = a1 ... 63 = h8)."""
         f, r = chess.square_file(square), chess.square_rank(square)
-        return (f - 3.5) * self.square, (r - 3.5) * self.square
+        return self.origin[0] + (f - 3.5) * self.square, self.origin[1] + (r - 3.5) * self.square
+
+    def on_field(self, xy) -> bool:
+        """Whether a world x/y lies over the 8x8 playing field."""
+        half = self.field / 2
+        return abs(xy[0] - self.origin[0]) <= half and abs(xy[1] - self.origin[1]) <= half
 
     def capture_slot(self, index: int) -> tuple[float, float]:
         """Where a piece taken off the board is set down.

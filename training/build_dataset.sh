@@ -13,17 +13,20 @@ WORKERS=${WORKERS:-4}
 # rebuild leaks about a gigabyte, and long-lived workers end up swapping.
 # That fix took collection from 650 to 928 episodes/hour.
 collect () {   # task, episodes, out
-  [ -d "$3" ] && [ "$(find "$3" -name meta.json | wc -l)" -ge "$2" ] && { echo "$3 already has $2 episodes"; return; }
-  $PY -u examples/collect_dataset.py --episodes "$2" --workers "$WORKERS" --chunk 25 \
+  have=$( [ -d "$3" ] && find "$3" -name meta.json | wc -l || echo 0 )
+  [ "$have" -ge "$2" ] && { echo "$3 already has $have episodes"; return; }
+  # An interrupted collection resumes: new shards get new seeds, so only the
+  # shortfall is recorded, not the whole count on top of what is there.
+  $PY -u examples/collect_dataset.py --episodes $(( $2 - have )) --workers "$WORKERS" --chunk 25 \
       --randomize --task "$1" --out "$3"
 }
-collect move    "$EPISODES_MOVE"    datasets/chess_vla2
-collect capture "$EPISODES_CAPTURE" datasets/chess_capture
+collect move    "$EPISODES_MOVE"    "$MOVE_RECORDINGS"
+collect capture "$EPISODES_CAPTURE" "$CAPTURE_RECORDINGS"
 
 # Only verified successes are exported; ~99% of recordings qualify.
 rm -rf "$DATASET_ROOT"
 $PY -u examples/export_lerobot.py \
-    --in datasets/chess_vla2 datasets/chess_capture \
+    --in "$MOVE_RECORDINGS" "$CAPTURE_RECORDINGS" \
     --repo-id "$REPO_ID" --root "$DATASET_ROOT" \
     --stride "$STRIDE" --encoder-threads 8
 touch "$DATASET_ROOT/.export-complete"

@@ -186,11 +186,17 @@ def _add_board(spec, board, texture_file):
     spec.add_texture(name="board_tex", type=mujoco.mjtTexture.mjTEXTURE_2D, file=texture_file)
     mat = spec.add_material(name="board_mat", reflectance=0.04)
     mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "board_tex"
-    spec.worldbody.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
-                            size=[board.width / 2, board.width / 2, board.thickness / 2],
-                            pos=[0, 0, board.table_top + board.thickness / 2],
-                            material="board_mat",
-                            solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
+    # A mocap body, not a world geom, so the board can be shifted between
+    # episodes. A static world geom's collision bounds are fixed at compile
+    # time: moving one at runtime moved its picture while pieces fell through
+    # the spot it now covered.
+    body = spec.worldbody.add_body(name="board", mocap=True,
+                                   pos=[board.origin[0], board.origin[1],
+                                        board.table_top + board.thickness / 2])
+    body.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
+                  size=[board.width / 2, board.width / 2, board.thickness / 2],
+                  material="board_mat",
+                  solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
 
 
 def _add_pieces(spec, board, appearance):

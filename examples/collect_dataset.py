@@ -46,12 +46,12 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size,
         if task == "capture":
             while True:
                 board = random_position(rng, rng.randint(2, 8))
-                env.reset(board.board_fen())
+                env.reset(board.board_fen(), rng=rng if randomize else None)
                 targets = env.executable_captures()
                 if targets:
                     break
             square = chess.square_name(rng.choice(targets))
-            recorder.begin(describe_capture(square), fen=env.board.fen(), move=f"x{square}",
+            recorder.begin(describe_capture(square), fen=env.board.fen(), layout=env.layout, move=f"x{square}",
                            task="capture",
                            appearance=env.appearance.__dict__ if randomize else None)
             result = env.capture(square, on_step=recorder.on_step)
@@ -66,17 +66,17 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size,
                 board = position_with_move(rng, rng.randint(2, 8), mv)
                 if board is None:
                     continue
-                env.reset(board.board_fen())
+                env.reset(board.board_fen(), rng=rng if randomize else None)
                 if mv in env.executable_moves():
                     break
             else:
                 board = random_position(rng, rng.randint(2, 8))
-                env.reset(board.board_fen())
+                env.reset(board.board_fen(), rng=rng if randomize else None)
                 candidates = env.executable_moves()
                 if candidates:
                     mv = rng.choice(candidates)
                     break
-        recorder.begin(describe(env.board, mv), fen=env.board.fen(), move=mv.uci(),
+        recorder.begin(describe(env.board, mv), fen=env.board.fen(), layout=env.layout, move=mv.uci(),
                        task="chess_move", appearance=env.appearance.__dict__ if randomize else None)
         result = env.move(chess.square_name(mv.from_square), chess.square_name(mv.to_square),
                           on_step=recorder.on_step)
@@ -97,7 +97,7 @@ def main():
     ap.add_argument("--episodes", type=int, default=50)
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--randomize", action="store_true", help="random appearance per episode")
+    ap.add_argument("--randomize", action="store_true", help="random appearance, board placement and arm start pose per episode")
     ap.add_argument("--image-size", type=int, nargs=2, default=(640, 480), metavar=("W", "H"))
     ap.add_argument("--chunk", type=int, default=25, help="episodes per worker process")
     ap.add_argument("--task", choices=["move", "capture"], default="move",

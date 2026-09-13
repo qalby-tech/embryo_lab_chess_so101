@@ -432,6 +432,20 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   saw at every restore start. With both fixes: 24/24 moves, 24/24 captures, 24/24 restores
   on the identical episodes, medians 0.9 / 1.4 / 1.1 mm against 0.9 / 1.3 / 0.9 mm before.
 
+- **The board and the arm's start now vary between episodes.** Every earlier recording had
+  the board centred exactly and the arm leaving one parked pose, so a policy could map an
+  instruction to joint angles without looking at the board; a real board is set down wherever
+  it lands. From 2026-09-14 `reset(rng=...)` shifts the board up to 10 mm on each axis (a third
+  of a square) and starts each joint up to 0.1 rad off its parked pose, and collection and
+  evaluation both draw it. The board had to become a mocap body: moving a static world geom at
+  runtime moved its image but not its collision surface, because MuJoCo fixes static collision
+  bounds at compile time, and a piece set on the strip the board newly covered fell to the
+  table. Scripted expert on fresh seeds: moves 162/168 (96%) randomized against 166/168 (99%)
+  nominal, captures 24/24 in both, median error 1.2-1.4 mm against 0.9-1.1 mm. The extra
+  failures sit at the edges of the workspace - a destination shifted to 91 mm from the arm
+  base, the far corner at 324 mm with a jittered start - and cost only collection time, since
+  only verified successes are exported.
+
 ---
 
 ## 8. Open questions

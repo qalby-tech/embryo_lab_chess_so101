@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import chess
@@ -58,16 +58,27 @@ class MoveResult:
     waypoints_precise: bool = True        # diagnostic: grasp/place waypoints hit tolerance
 
 
+# Layout randomization for reset(rng=...). A real board is never set down in
+# exactly the same spot and a real arm is never parked in exactly the same pose;
+# a policy that only ever saw one of each can key on it instead of looking.
+BOARD_SHIFT = 0.010         # m, each axis - about a third of a square
+ARM_START_JITTER = 0.10     # rad, each joint
+
+
 class ChessSimEnv:
     def __init__(self, board_spec: BoardSpec = BoardSpec(), appearance: Appearance = Appearance(),
                  cameras: tuple[str, ...] = ROBOT_CAMERAS,
                  image_size: tuple[int, int] = (640, 480),
                  control_hz: int = 30):
         self.board_spec = board_spec
+        self._nominal_origin = board_spec.origin
         self.appearance = appearance
         self.spec = build_scene(board_spec, appearance)
         self.model = self.spec.compile()
         self.data = mujoco.MjData(self.model)
+        self._board_mocap = self.model.body_mocapid[
+            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "board")]
+        self.layout = {"board_origin": list(board_spec.origin), "arm_start": arm_rest_pose()}
         self.control_hz = control_hz
         self.substeps = max(1, int(round(1.0 / (control_hz * self.model.opt.timestep))))
         self.board = chess.Board(None)
@@ -95,7 +106,20 @@ class ChessSimEnv:
         self._renderer: mujoco.Renderer | None = None
         self.controller = PickPlaceController(self)
         self._step_count = 0
-        self.reach = ReachMap.compute(board_spec, self._tool_query, grasp_height=0.016)
+        self.reach = self._compute_reach()
+
+    def _compute_reach(self) -> ReachMap:
+        return ReachMap.compute(self.board_spec, self._tool_query, grasp_height=0.016)
+
+    def _move_board(self, origin) -> None:
+        """Put the board's centre at `origin` (world x/y). Pieces are not moved;
+        reset() lays them out afterwards."""
+        origin = (float(origin[0]), float(origin[1]))
+        self.data.mocap_pos[self._board_mocap][:2] = origin
+        if origin != self.board_spec.origin:
+            self.board_spec = replace(self.board_spec, origin=origin)
+            # which squares the scripted grasp can work on depends on where they are
+            self.reach = self._compute_reach()
 
     def _tool_query(self, target: np.ndarray):
         res = self.ik.solve(self.data, target)
@@ -104,8 +128,19 @@ class ChessSimEnv:
 
     # -- lifecycle -----------------------------------------------------------
 
-    def reset(self, fen: str = START_FEN, settle_seconds: float = 0.8) -> Observation:
-        """Lay out a position (FEN board field or full FEN) and park the arm."""
+    def reset(self, fen: str = START_FEN, settle_seconds: float = 0.8, rng=None) -> Observation:
+        """Lay out a position (FEN board field or full FEN) and park the arm.
+
+        With `rng` (anything with `uniform`, e.g. random.Random) the board is
+        shifted up to BOARD_SHIFT from its nominal spot and the arm starts up to
+        ARM_START_JITTER from its parked pose; without it both are nominal. The
+        draw is kept in `layout`."""
+        if rng is None:
+            origin = self._nominal_origin
+        else:
+            origin = (self._nominal_origin[0] + rng.uniform(-BOARD_SHIFT, BOARD_SHIFT),
+                      self._nominal_origin[1] + rng.uniform(-BOARD_SHIFT, BOARD_SHIFT))
+        self._move_board(origin)
         position = chess.Board(fen if " " in fen else f"{fen} w - - 0 1")
         self.board = position
         self._square_slot = {}
@@ -123,6 +158,12 @@ class ChessSimEnv:
             x, y = self.board_spec.graveyard_slot(i)
             self._place(slot, x, y, self.board_spec.table_top)
         rest = arm_rest_pose()
+        if rng is not None:
+            ranges = self.model.actuator_ctrlrange[self._actuators]
+            rest = {n: float(np.clip(v + rng.uniform(-ARM_START_JITTER, ARM_START_JITTER),
+                                     *ranges[JOINTS.index(n)]))
+                    for n, v in rest.items()}
+        self.layout = {"board_origin": list(self.board_spec.origin), "arm_start": rest}
         for name, value in rest.items():
             adr = self._joint_qpos[JOINTS.index(name)]
             self.data.qpos[adr] = value
@@ -270,8 +311,7 @@ class ChessSimEnv:
 
         pos = self.piece_position(slot)
         error = float(np.hypot(pos[0] - target[0], pos[1] - target[1]))
-        field = self.board_spec.field / 2
-        off_board = abs(pos[0]) > field or abs(pos[1]) > field
+        off_board = not self.board_spec.on_field(pos[:2])
         upright = self.piece_upright(slot) > UPRIGHT_MIN
         disturbed = [chess.square_name(s) for s, xy in before.items()
                      if s != src and np.linalg.norm(self.piece_position(self._square_slot[s])[:2] - xy)

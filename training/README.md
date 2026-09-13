@@ -18,6 +18,11 @@ Instructions are deliberately spatial: executing one needs no chess knowledge,
 so a chess engine can choose the move and the policy only has to carry it out.
 Every instruction names its source square, so nothing has to be searched for.
 
+Each episode varies colours, lighting and piece size, and also shifts the board
+up to 10 mm each way and starts the arm up to 0.1 rad from its parked pose, so
+the policy has to find squares in the image rather than remember joint angles.
+Evaluation draws the same variation (`--nominal-layout` turns it off).
+
 Success is the rule the scripted expert is held to: the piece ends within
 **11 mm** of the target square, upright, nothing else displaced.
 
@@ -28,7 +33,7 @@ Success is the rule the scripted expert is held to: the piece ends within
 training/preflight.sh
 
 # 1. build the dataset - skips collection if the recordings are already present
-training/build_dataset.sh          # ~3 h collection + ~4 h export for 7,343 episodes
+training/build_dataset.sh          # ~7 h collection + ~3 h export for 6,200 episodes
 
 # 2. train
 training/train.sh                  # on the host, in an environment with lerobot
