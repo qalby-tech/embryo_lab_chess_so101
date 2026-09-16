@@ -61,7 +61,7 @@ If a fresh environment reproduces these, it is set up correctly.
 | one move (`e2e4`) | 300 eps | 12,000 | **16/16**, median 2.1 mm |
 | four moves | 800 eps | 8,000 | **13/16**, right piece 14/16 |
 | moves, captures, restores | 7,343 eps | 57,000 (0.28 epochs) | moves **15/32**, captures **9/16**, restores 1/16 |
-| moves and captures, re-collected | 6,095 eps | 70,000 (1.13 epochs) | moves **25/32**, captures **10/16**, named piece 16/16 |
+| moves and captures, re-collected | 6,095 eps | 70,000 (1.13 epochs) | moves **54/64**, captures **25/32**, named piece 30/32 |
 
 Three findings matter more than any hyperparameter:
 

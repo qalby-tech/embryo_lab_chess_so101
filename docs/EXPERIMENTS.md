@@ -182,6 +182,18 @@ upright just outside the 11 mm tolerance. Five of the six capture failures happe
 correct grasp - three fell, one disturbed neighbours - and the named piece was engaged in every
 one of the 16.
 
+**Confirmation run on 96 episodes** (seed 100, same checkpoint, recorded): moves **54/64 (84%)**,
+captures **25/32 (78%)**, named piece engaged in 30/32 captures, both medians 5.3 mm. Of the 10 move
+failures, 2 dropped the piece, 4 ended upright within 25 mm of the square and 4 beyond it, and 2
+disturbed a neighbour; of the 7 capture failures, 3 dropped the piece. Reels:
+`sim/out/vla_video/reel_mc70k_{moves,captures}.mp4`.
+
+- **A score on 48 episodes carries a spread of several successes.** The 96-episode run repeats the
+  training-time evaluation's positions before going beyond them, and on the 29 move episodes that
+  line up it scored 24 against 22 - with **8 outcomes flipped** (5 fail->OK, 3 OK->fail). Same
+  weights, same board, different rollout: the policy samples its actions. Differences of this size
+  between checkpoints (50,000 at 32/48 against 62,500 at 27/48) are therefore not evidence of
+  anything; compare checkpoints on 96 episodes or more, or on the same rollout seed.
 - **Sizing the decay to the run changed the shape of the curve.** In §4.5 the score stopped
   moving once the learning rate hit its floor at 24,000 (6/16, 5/16, 5/16, 7/16 from 23,000 to
   53,000). Here it rose at every evaluation but one and was still rising at the end, which
