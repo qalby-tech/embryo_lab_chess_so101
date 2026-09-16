@@ -61,8 +61,14 @@ If a fresh environment reproduces these, it is set up correctly.
 | one move (`e2e4`) | 300 eps | 12,000 | **16/16**, median 2.1 mm |
 | four moves | 800 eps | 8,000 | **13/16**, right piece 14/16 |
 | moves, captures, restores | 7,343 eps | 57,000 (0.28 epochs) | moves **15/32**, captures **9/16**, restores 1/16 |
+| moves and captures, re-collected | 6,095 eps | 70,000 (1.13 epochs) | moves **25/32**, captures **10/16**, named piece 16/16 |
 
-Two findings matter more than any hyperparameter:
+Three findings matter more than any hyperparameter:
+
+**Size the learning-rate decay to the run.** MolmoAct2 decays over a fixed 24,000 steps whatever
+`--steps` says. The 57,000-step run spent everything past 24,000 at the floor and stopped
+improving; the 70,000-step run with the decay sized to it improved at almost every evaluation and
+was still improving at the end.
 
 **Steps predict performance, not epochs.** Four moves at 8,000 steps and 1.08
 epochs scored 81%; one move at 3,000 steps and 1.1 epochs scored 37%. Budget in

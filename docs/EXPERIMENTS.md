@@ -155,6 +155,51 @@ steps per episode:
 
 ---
 
+### 4.6 Moves and captures, re-collected - 6,095 episodes, 70,000 steps
+
+MolmoAct2 from the base checkpoint on the two families that survived the 2026-09-14 review
+(4,903 moves, 1,192 captures; 497,565 frames at 10 Hz). Everything the earlier run got wrong
+was changed at once: contact fixed so pieces cannot sink through the board, restores dropped,
+the board shifted up to 10 mm per axis and the arm started up to 0.1 rad off its parked pose in
+every episode, batch 8 with no accumulation, and `scheduler_decay_steps` sized to the run rather
+than LeRobot's fixed 24,000. 70,000 steps is 1.13 epochs. Evaluation every 10,000 steps on 32
+moves and 16 captures (seed 100), 450 control steps per episode, interpolated, with the same
+layout randomization the training data has - a harder test than §4.5's fixed board and 300 steps.
+
+| step | total | moves | captures | named piece picked | median error | learning-rate decay |
+| --- | --- | --- | --- | --- | --- | --- |
+| 10,000 | 5/48 | 2/32 | 3/16 | 8/16 | 109.0 mm | 14% |
+| 20,000 | 11/48 | 7/32 | 4/16 | 12/16 | 92.4 mm | 29% |
+| 30,000 | 19/48 | 10/32 | 9/16 | 12/16 | 20.3 mm | 43% |
+| 40,000 | 27/48 | 18/32 | 9/16 | 14/16 | 9.1 mm | 57% |
+| 50,000 | 32/48 | 20/32 | 12/16 | 14/16 | 7.5 mm | 71% |
+| 62,500 | 27/48 | 18/32 | 9/16 | 14/16 | 9.7 mm | 89% |
+| **70,000** | **35/48** | **25/32 (78%)** | **10/16 (63%)** | **16/16** | **5.5 mm** | floor |
+
+Final checkpoint `outputs/molmoact2_mc/checkpoints/070000`: moves median 4.8 mm, captures median
+7.0 mm. Of 31 move episodes shown in the log, 24 succeeded, 2 ended with the piece fallen and 3
+upright just outside the 11 mm tolerance. Five of the six capture failures happened after a
+correct grasp - three fell, one disturbed neighbours - and the named piece was engaged in every
+one of the 16.
+
+- **Sizing the decay to the run changed the shape of the curve.** In §4.5 the score stopped
+  moving once the learning rate hit its floor at 24,000 (6/16, 5/16, 5/16, 7/16 from 23,000 to
+  53,000). Here it rose at every evaluation but one and was still rising at the end, which
+  suggests the budget, not the data, was the limit. The single dip (62,500 at 27/48 between
+  32/48 and 35/48) is within the noise of 48 episodes.
+- **Grounding is solved for these instructions; handling is what is left.** The final policy
+  engaged the named piece in 16/16 captures against 10/16 in §4.5, and the old run's dominant
+  failure - never touching the piece - is gone. What remains is dropping a piece or setting it
+  down a few millimetres out, and captures trail moves because the piece is carried further.
+- **The randomization cost nothing measurable.** Despite the shifted board, the varied start
+  pose and a 50% longer horizon, moves went from 15/32 to 25/32 and captures from 9/16 to 10/16.
+- **Run cost.** 6.3 h to record the moves, 1.7 h the captures, 3.2 h to export, and 47 h of
+  training and evaluation (2026-09-14 16:55 to 2026-09-16 15:34) at ~2.0 s/step on the 5090. An
+  accidental reboot at 04:17 on the last day cost about 500 steps: the user service restarted,
+  resumed from its last checkpoint, and shifted the 60,000 evaluation to 62,500.
+
+---
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
