@@ -41,6 +41,20 @@ docker build -t chess-train:cu128 -f training/Dockerfile .
 training/train_docker.sh           # or self-contained in a container
 ```
 
+### Unattended runs (this box)
+
+Two user services carry a long run: `chess-train.service` runs export-then-train and
+restarts after a crash or reboot, and `chess-prune.service` deletes every checkpoint
+except the resume point and the best one - 18 GB each, written every 500 steps. Both are
+off between runs; start the next run with
+
+```bash
+systemctl --user enable --now chess-train.service   # pulls in the pruner
+systemctl --user disable --now chess-train.service  # stops both when the run is done
+```
+
+The pruner is `PartOf` training, so it starts and stops with it and never runs alone.
+
 `train.sh` resumes from the last complete checkpoint, so re-running it after any
 interruption continues rather than restarts. Checkpoints land every 500 steps
 in `outputs/molmoact2_full/checkpoints/`; the loop keeps the best and the newest
