@@ -57,7 +57,8 @@ def dataset_fps(root: str | None, default: int = 30) -> int:
 
 def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_step=None,
                 hold: int = 1, moves: tuple[str, ...] = (), interpolate: bool = False,
-                index: int = 0, task: str = "move", jitter: bool = True) -> dict:
+                index: int = 0, task: str = "move", jitter: bool = True,
+                select_kwargs: dict | None = None) -> dict:
     """One instructed move under policy control; returns the outcome."""
     source = None
     if task == "capture":
@@ -105,7 +106,7 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
     while steps < max_steps:
         with torch.inference_mode():
             batch = preprocess(observation(env, instruction, device))
-            action = postprocess(policy.select_action(batch))
+            action = postprocess(policy.select_action(batch, **(select_kwargs or {})))
         command = to_radians(action[0].float().cpu().numpy())
         for k in range(hold):
             # A policy trained at a reduced rate emits one target per `hold`
@@ -149,6 +150,18 @@ def run_episode(env, policy, processors, rng, max_steps: int, device: str, on_st
             "right_piece": bool(right_piece), "success": bool(success)}
 
 
+def wilson(successes: int, episodes: int, z: float = 1.96) -> tuple[float, float]:
+    """95% interval for a success rate. A score of 54/64 is 84% give or take nine
+    points; without the interval, two checkpoints look different when they are not."""
+    if episodes == 0:
+        return (0.0, 0.0)
+    p = successes / episodes
+    d = 1 + z * z / episodes
+    center = p + z * z / (2 * episodes)
+    margin = z * ((p * (1 - p) + z * z / (4 * episodes)) / episodes) ** 0.5
+    return ((center - margin) / d, (center + margin) / d)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True, help="trained policy directory")
@@ -165,6 +178,11 @@ def main():
                     help="ramp between the policy's targets instead of stepping to each")
     ap.add_argument("--nominal-layout", action="store_true",
                     help="board and arm start exactly in place, instead of shifted as in training")
+    ap.add_argument("--n-action-steps", type=int, default=None,
+                    help="actions executed per model call (trained default 30). At 10 Hz targets "
+                         "held for 3 control steps, 30 means three seconds of open-loop motion")
+    ap.add_argument("--num-inference-steps", type=int, default=None,
+                    help="flow-matching steps per action chunk; more costs time and cuts sampling noise")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
     args = ap.parse_args()
@@ -176,6 +194,12 @@ def main():
     # the checkpoint carries its own normalization pipelines; the policy sees
     # normalized inputs and returns actions in dataset units through them
     processors = make_pre_post_processors(policy_cfg=policy.config, pretrained_path=args.checkpoint)
+    if args.n_action_steps:
+        policy.config.n_action_steps = args.n_action_steps   # reset() rebuilds the queue from this
+        policy.reset()
+    select_kwargs = {"num_steps": args.num_inference_steps} if args.num_inference_steps else {}
+    print(f"executing {policy.config.n_action_steps} of {policy.config.chunk_size} actions per model call"
+          + (f"; {args.num_inference_steps} flow steps" if args.num_inference_steps else ""))
     env = ChessSimEnv(cameras=tuple(CAMERAS) + ("external",), image_size=(640, 480))
     writer = None
     if args.video:
@@ -196,7 +220,7 @@ def main():
     for i in range(args.episodes):
         outcome = run_episode(env, policy, processors, rng, args.max_steps, args.device,
                               record, hold, moves, args.interpolate, i, args.task,
-                              not args.nominal_layout)
+                              not args.nominal_layout, select_kwargs)
         successes += outcome["success"]
         errors.append(outcome["placement_error"])
         outcomes.append(outcome)
@@ -205,8 +229,9 @@ def main():
               f"{', fell' if not outcome['upright'] else ''}"
               f"{', disturbed ' + ','.join(outcome['disturbed']) if outcome['disturbed'] else ''})",
               flush=True)
+    lo, hi = wilson(successes, args.episodes)
     print(f"{successes}/{args.episodes} successes; median placement error "
-          f"{np.median(errors) * 1000:.1f} mm")
+          f"{np.median(errors) * 1000:.1f} mm; 95% CI {lo * 100:.1f}-{hi * 100:.1f}%")
     if moves or args.task != "move":
         right = sum(o["right_piece"] for o in outcomes)
         print(f"picked the named piece in {right}/{len(outcomes)} episodes")

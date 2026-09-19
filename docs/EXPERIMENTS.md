@@ -304,6 +304,36 @@ four is not 1,252.
 
 ---
 
+### 5.6 The policy was acting three seconds blind
+
+MolmoAct2 predicts a 30-action chunk and `select_action` pops one action per call, regenerating
+only when the queue empties. With targets held for three control steps, one forward pass covered
+90 control steps - **three seconds** - and about five forwards ran in a 450-step episode. Executing
+only the first five actions of each chunk and re-planning scores **82% against 75%** on the same
+128 positions and halves dropped pieces (8 against 19, paired McNemar **p = 0.043**), with the
+median placement error unchanged at 5.1 mm. No retraining: one config field, and five seconds more
+per episode.
+
+The curve is not monotone, and the far end is catastrophic:
+
+| actions per model call | open loop | success (128 positions) | dropped |
+| --- | --- | --- | --- |
+| 30 (trained default) | 3.0 s | 96/128 (75%) | 19 |
+| 10 | 1.0 s | 100/128 (78%) | 15 |
+| **5** | **0.5 s** | **105/128 (82%)** | **8** |
+| 3 | 0.3 s | 84/128 (66%) | 20 |
+| 1 | 0.1 s | 3/128 (2%) | 33 |
+
+Each chunk is drawn from fresh noise, so re-planning often replaces one committed motion with many
+disagreeing ones; at one action per call the arm never commits to a grasp at all. A fifth of the
+chunk is the best of the settings tried. Sampling noise is the other half of this story - the same
+weights on the same 128 positions disagree with themselves on 45 of them - and whether more
+flow-matching steps (the default is 10) settle it is untested.
+
+Protocol note: these comparisons replay identical positions in every arm and are read with paired
+tests, because at 80% on 128 episodes the unpaired interval is ±7 points - wider than every
+difference in the table.
+
 ## 6. Metrics — and a correction
 
 **Median placement error was misleading and results reported with it should be re-read.**
