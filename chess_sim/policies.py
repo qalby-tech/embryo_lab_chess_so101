@@ -30,7 +30,7 @@ from .tasks import Task
 
 # Measured (docs/EXPERIMENTS.md 5.6): executing 5 actions of the 30-action chunk
 # scores 82% against 75% for the whole chunk, with half the dropped pieces
-# (48 paired episodes, p=0.043). The published checkpoint still ships 30.
+# (128 paired positions, McNemar p=0.043). The published checkpoint still ships 30.
 DEFAULT_ACTION_STEPS = 5
 DEFAULT_TARGET_HZ = 10          # the strided export's frame rate
 PIXEL_MAX = 255.0
