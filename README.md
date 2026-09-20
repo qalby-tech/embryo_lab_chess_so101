@@ -121,7 +121,9 @@ results = demonstrate(env, MoveSampler(), episodes=500, rng=random.Random(0), re
 and the input features are read from the checkpoint itself - and owns the two
 knobs that decide how a chunked policy behaves: how many actions of a chunk to
 execute before looking again, and how to spread each emitted target over the
-control period.
+control period. It executes the whole 30-action chunk by default, which is what
+keeps up with a moving arm; `n_action_steps=5` is worth 17 points on captures
+wherever the loop can wait for six times the model calls.
 
 ```python
 from chess_sim import LeRobotPolicy, LeRobotPolicyConfig
@@ -165,10 +167,11 @@ trained against them yet.
 offsets over a frozen base policy with the cross-entropy method - no gradients
 through the base, which matters when a model call costs seconds.
 
-**Correcting a policy mid-episode.** The expert plans from whatever pose the arm
-is in, so letting the policy run for a while and then calling `env.execute(task)`
-finishes the same episode by hand — the policy-prefix / expert-suffix recipe
-DAgger needs, with no extra machinery.
+**DAgger.** `recover(env, policy, task, recorder)` lets the policy drive until it
+is demonstrably going wrong — wrong piece engaged, a neighbour knocked, the named
+piece still where it started — then hands the episode to the expert and records
+only the correction, tagged with what went wrong.
+`examples/collect_recoveries.py` runs that over a dataset's worth of episodes.
 
 ## The pipeline end to end
 

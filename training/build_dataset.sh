@@ -23,10 +23,13 @@ collect () {   # task, episodes, out
 collect move    "$EPISODES_MOVE"    "$MOVE_RECORDINGS"
 collect capture "$EPISODES_CAPTURE" "$CAPTURE_RECORDINGS"
 
-# Only verified successes are exported; ~99% of recordings qualify.
+# Only verified successes are exported; ~99% of recordings qualify. Recovery
+# episodes join them when they have been collected - they are demonstrations
+# like any other, just starting from a state the policy steered into.
+RECOVERIES=$( [ -d "${RECOVERY_RECORDINGS:-}" ] && echo "$RECOVERY_RECORDINGS" || echo "" )
 rm -rf "$DATASET_ROOT"
 $PY -u examples/export_dataset.py \
-    --in "$MOVE_RECORDINGS" "$CAPTURE_RECORDINGS" \
+    --in "$MOVE_RECORDINGS" "$CAPTURE_RECORDINGS" $RECOVERIES \
     --repo-id "$REPO_ID" --root "$DATASET_ROOT" \
     --stride "$STRIDE" --encoder-threads 8
 touch "$DATASET_ROOT/.export-complete"

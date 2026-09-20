@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import imageio.v2 as imageio
 import numpy as np
 
-from .config import JOINTS, ROBOT_CAMERAS, AppearanceConfig, Camera, Config
+from .config import JOINTS, ROBOT_CAMERAS, AppearanceConfig, Camera, Config, RecoveryTrigger
 from .env import ChessSimEnv, Layout, Record, TaskResult
 from .tasks import Task, TaskFamily
 
@@ -45,6 +45,7 @@ class EpisodeMeta(Record):
     fps: int
     joints: list[str]
     cameras: list[str]
+    recovery: RecoveryTrigger | None = None   # set when an expert took over from a policy
     success: bool = False
     steps: int = 0
     placement_error: float = 0.0
@@ -71,14 +72,18 @@ class EpisodeRecorder:
         self._meta: EpisodeMeta | None = None
         self._buf = _Buffer()
 
-    def begin(self, task: Task, record_appearance: bool = False) -> None:
-        """Start an episode: the position and layout are read off the env."""
+    def begin(self, task: Task, record_appearance: bool = False,
+              recovery: RecoveryTrigger | None = None) -> None:
+        """Start an episode: the position and layout are read off the env.
+
+        `recovery` marks an episode that begins where a policy went wrong, so a
+        dataset can be filtered by what the correction was for."""
         self._buf = _Buffer(frames={cam: [] for cam in self.config.cameras})
         self._meta = EpisodeMeta(
             episode=self._index, instruction=task.instruction, task=task.family, move=task.label,
             fen=self.env.position.fen(), layout=self.env.layout,
             appearance=self.env.config.appearance if record_appearance else None,
-            fps=self.env.control_hz, joints=[str(j) for j in JOINTS],
+            recovery=recovery, fps=self.env.control_hz, joints=[str(j) for j in JOINTS],
             cameras=[str(c) for c in self.config.cameras])
 
     def on_step(self, action: np.ndarray) -> None:

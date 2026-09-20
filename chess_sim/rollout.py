@@ -13,11 +13,11 @@ import random
 import statistics
 from typing import Callable, Sequence
 
-from .config import Config
+from .config import Config, RecoveryTrigger
 from .env import ChessSimEnv, Observation, OnStep, PieceSnapshot, Record, TaskResult
 from .policies import Policy
 from .rewards import RewardConfig, shaping_reward, terminal_reward
-from .tasks import Task, TaskFamily, TaskSampler
+from .tasks import AnyTask, Task, TaskFamily, TaskSampler
 
 CONFIDENCE_Z = 1.96     # 95%
 
@@ -168,6 +168,83 @@ def _chain(*hooks: OnStep | None) -> OnStep | None:
         for hook in hooks:
             hook(action)
     return call
+
+
+class DaggerConfig(Config):
+    """When the expert should take over from a policy.
+
+    A fixed hand-over point mostly re-records ordinary demonstrations from a
+    random pose. Waiting until the policy is demonstrably going wrong collects
+    corrections for the states it actually gets itself into, which is the only
+    reason to run DAgger at all.
+    """
+
+    min_prefix: int = 30          # control steps before anything counts as going wrong
+    check_every: int = 15         # how often to look, in control steps
+    stall_fraction: float = 0.6   # of the budget: by here the named piece must have moved
+
+
+class DaggerResult(Record):
+    """One correction attempt."""
+
+    task: AnyTask
+    trigger: RecoveryTrigger | None      # None: the policy was doing fine, nothing recorded
+    prefix_steps: int                    # how long the policy drove before the hand-over
+    policy_success: bool                 # did the policy finish it before any trigger fired
+    result: TaskResult | None = None     # the expert's attempt, when it took over
+
+
+def _trigger(env: ChessSimEnv, task: Task, before: PieceSnapshot, steps: int,
+             rollout: "RolloutConfig", dagger: DaggerConfig) -> RecoveryTrigger | None:
+    """Is the policy's attempt already wrong? Scored with the same rule as everything else."""
+    verdict = env.evaluate(task, before, steps=steps)
+    if verdict.success:
+        return None
+    if verdict.disturbed:
+        return RecoveryTrigger.DISTURBED
+    if verdict.picked is not None and verdict.picked != task.source:
+        return RecoveryTrigger.WRONG_PIECE
+    if steps >= dagger.stall_fraction * rollout.max_steps and verdict.picked is None:
+        return RecoveryTrigger.STALLED
+    return None
+
+
+def recover(env: ChessSimEnv, policy: Policy, task: Task, recorder=None,
+            config: RolloutConfig = RolloutConfig(),
+            dagger: DaggerConfig = DaggerConfig()) -> DaggerResult:
+    """Let the policy drive until it goes wrong, then have the expert finish.
+
+        result = recover(env, policy, task, recorder)
+
+    Only the expert's half is recorded - the policy's own bad behaviour must not
+    end up in the training set - and the episode's metadata carries what went
+    wrong, so the corrections can be read back by failure mode.
+    """
+    before = env.piece_snapshot()
+    policy.reset()
+    observation = env.observe()
+    trigger, steps = None, 0
+    for step in range(config.max_steps):
+        observation = env.step(policy.select_action(observation, task),
+                               images=policy.needs_images())
+        steps = step + 1
+        if steps < dagger.min_prefix or steps % dagger.check_every:
+            continue
+        trigger = _trigger(env, task, before, steps, config, dagger)
+        if trigger is not None:
+            break
+    if trigger is None:
+        finished = env.evaluate(task, before, steps=steps)
+        return DaggerResult(task=task, trigger=None, prefix_steps=steps,
+                            policy_success=finished.success)
+
+    if recorder is not None:
+        recorder.begin(task, recovery=trigger)
+    result = env.execute(task, on_step=None if recorder is None else recorder.on_step)
+    if recorder is not None:
+        recorder.end(result)
+    return DaggerResult(task=task, trigger=trigger, prefix_steps=steps, policy_success=False,
+                        result=result)
 
 
 class StepResult(Record):

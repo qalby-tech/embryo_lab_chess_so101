@@ -147,7 +147,7 @@ from chess_sim.hub import MODEL_REPO       # 'XvKuoMing/so101_chess'
 policy = LeRobotPolicy.load(LeRobotPolicyConfig.for_dataset(
     checkpoint=MODEL_REPO,                        # or a local checkpoint directory
     dataset_root="datasets/lerobot/chess_mc",     # read for the rate it emits targets at
-    n_action_steps=5,                             # +17 points on captures, nothing on moves
+    n_action_steps=5,                             # override: +17 on captures (default is 30)
     interpolate=True))
 
 task = MoveSampler().sample(env, random.Random(100))
@@ -290,19 +290,46 @@ For a reward of your own, the pieces are public: `env.piece_snapshot()` for
 where things were, `env.evaluate(task, before)` for the verdict, and
 `reach_reward` / `progress_reward` / `terminal_reward` for the arithmetic.
 
-**DAgger.** The expert plans from whatever pose the arm is in, so letting the
-policy run and then calling `env.execute(task)` finishes the same episode by
-hand - a corrected trajectory with no extra machinery:
+## 9. DAgger: recording the way out of the policy's own mistakes
+
+Ordinary demonstrations only ever show the arm doing things right, so a policy
+never learns its way out of the messes it makes. `recover` lets the policy drive
+until it is demonstrably going wrong, then hands the same episode to the expert
+and records only the expert's half:
 
 ```python
-policy.reset()
-observation = env.observe(images=False)
-for _ in range(prefix_steps):
-    observation = env.step(policy.select_action(observation, task), images=False)
-corrected = env.execute(task)      # expert suffix, recorded like any demonstration
+from chess_sim import DaggerConfig, EpisodeRecorder, RecorderConfig, recover
+
+recorder = EpisodeRecorder(env, RecorderConfig(root="datasets/chess_recoveries"))
+outcome = recover(env, policy, task, recorder, RolloutConfig(max_steps=450),
+                  DaggerConfig(min_prefix=30, check_every=15, stall_fraction=0.6))
+outcome.trigger        # RecoveryTrigger.STALLED, or None if the policy was doing fine
+outcome.prefix_steps   # how long it drove before the hand-over
+outcome.result         # the expert's attempt, scored like any other
 ```
 
-## 9. Published artifacts
+A correction is triggered when the policy engages the wrong piece, disturbs a
+neighbour, or has still not moved the named piece after `stall_fraction` of the
+budget - all read off `env.evaluate`, the same rule everything else is scored
+by. Handing over at a fixed step instead would mostly re-record ordinary
+demonstrations from a random pose, which is not worth the GPU time.
+
+The episode's `meta.json` carries `recovery`, so a dataset can be filtered by
+what the correction was for, and `export_dataset.py` treats the shards like any
+other demonstrations. `examples/collect_recoveries.py` runs the loop:
+
+```bash
+python examples/collect_recoveries.py --episodes 200 --task capture \
+    --checkpoint outputs/molmoact2_mc/checkpoints/070000/pretrained_model \
+    --dataset-root datasets/lerobot/chess_mc --out datasets/chess_recoveries
+```
+
+Captures are the default because that is the demonstrated weak spot: at the
+shipped 30-action horizon they score 68% against 85% at a fifth of the chunk
+(§5.7). Corrections collected there are aimed at making the full chunk work,
+rather than working around it at inference time.
+
+## 10. Published artifacts
 
 ```python
 from chess_sim import hub

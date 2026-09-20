@@ -28,11 +28,12 @@ from .conventions import SO101_DEGREES, JointConvention
 from .env import Observation
 from .tasks import Task
 
-# Measured on 300 paired positions (docs/EXPERIMENTS.md 5.7): executing 5 actions of
-# the 30-action chunk is worth 17 points on captures (85% against 68%, p=0.002) and
-# nothing on moves (78% against 80%). It costs six times the model calls, so a loop
-# that has to keep up with a 30 Hz arm may want the checkpoint's own 30 instead.
-DEFAULT_ACTION_STEPS = 5
+# The checkpoint's own horizon: execute the whole predicted chunk. Measured on 300
+# paired positions (docs/EXPERIMENTS.md 5.7), executing only 5 of the 30 actions and
+# re-planning is worth 17 points on captures (85% against 68%, p=0.002) and nothing on
+# moves - at six times the model calls, which a 30 Hz arm cannot always afford. Set
+# n_action_steps=5 when the loop can wait; the default keeps up.
+DEFAULT_ACTION_STEPS = 30
 DEFAULT_TARGET_HZ = 10          # the strided export's frame rate
 PIXEL_MAX = 255.0
 STATE_FEATURE = "observation.state"

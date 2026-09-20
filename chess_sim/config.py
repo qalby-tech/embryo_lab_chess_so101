@@ -57,6 +57,14 @@ class FailureReason(StrEnum):
     DISTURBED = "disturbed other pieces"
 
 
+class RecoveryTrigger(StrEnum):
+    """What made a scripted expert take over from a policy mid-episode."""
+
+    WRONG_PIECE = "engaged the wrong piece"
+    DISTURBED = "disturbed a neighbour"
+    STALLED = "named piece had not moved"
+
+
 class JointName(StrEnum):
     """The six SO-101 joints, in the order every action and state vector uses."""
 
