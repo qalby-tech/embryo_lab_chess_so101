@@ -68,8 +68,13 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="outputs/sweeps/inference.jsonl")
     ap.add_argument("--resume", action="store_true", help="skip positions already in --out")
+    ap.add_argument("--arms", nargs="*", default=None,
+                    help="only these arms by label, for extending one comparison cheaply")
     args = ap.parse_args()
 
+    arms = DEFAULT_ARMS if not args.arms else [a for a in DEFAULT_ARMS if a.label in args.arms]
+    if not arms:
+        raise SystemExit(f"no arms match {args.arms}; known: {[a.label for a in DEFAULT_ARMS]}")
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     done: set[tuple[int, str]] = set()
     if args.resume and os.path.exists(args.out):
@@ -98,7 +103,7 @@ def main():
         family = TaskFamily.CAPTURE if index % (MOVES_PER_CAPTURE + 1) == MOVES_PER_CAPTURE \
             else TaskFamily.MOVE
         sampler = CaptureSampler() if family is TaskFamily.CAPTURE else MoveSampler()
-        for arm in DEFAULT_ARMS:
+        for arm in arms:
             if (index, arm.label) in done:
                 continue
             # same seed per position, so every arm sees the same board, shift and start pose
@@ -121,15 +126,15 @@ def main():
         print(f"[{index + 1}/{args.positions}] {scored} ({elapsed:.0f} min)", flush=True)
 
     print("\nper arm:")
-    for arm in DEFAULT_ARMS:
+    for arm in arms:
         results = outcomes[arm.label]
         low, high = wilson_interval(sum(results.values()), len(results))
         print(f"  {arm.label:18s} {sum(results.values())}/{len(results)} "
               f"({100 * sum(results.values()) / max(len(results), 1):.0f}%, "
               f"95% CI {low * 100:.0f}-{high * 100:.0f}%)")
-    baseline = DEFAULT_ARMS[0]
+    baseline = arms[0]
     print(f"\npaired against {baseline.label}:")
-    for arm in DEFAULT_ARMS[1:]:
+    for arm in arms[1:]:
         shared = sorted(set(outcomes[baseline.label]) & set(outcomes[arm.label]))
         pairs = [(outcomes[baseline.label][i], outcomes[arm.label][i]) for i in shared]
         b, c, p = mcnemar(pairs)
