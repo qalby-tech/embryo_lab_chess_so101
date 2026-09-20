@@ -20,3 +20,4 @@ chess_sim/assets/scene/generated/
 # training runs and checkpoints
 outputs/
 *.egg-info/
+MUJOCO_LOG.TXT

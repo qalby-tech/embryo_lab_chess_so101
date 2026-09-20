@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .config import Config
+
 # Jaw gap at the fingertips as a function of the gripper joint angle (rad):
 # gap ≈ GAP_AT_ZERO + GAP_PER_RAD * angle, valid over the closing range.
 GAP_AT_ZERO = 0.0158
@@ -25,11 +27,19 @@ PAD_REACH = 0.010    # the pads extend this far from the pocket center along the
 # thin boxes on the inner faces of the prong tips. The stock finger meshes
 # collide as convex hulls, which fill the pinch pocket and make friction
 # meaningless; the pads replace them for contact.
+class FingerPad(Config):
+    """A pad box in its jaw's body frame."""
+
+    pos: tuple[float, float, float]
+    quat: tuple[float, float, float, float]
+    size: tuple[float, float, float]
+
+
 FINGER_PADS = {
-    "gripper": {"pos": (-0.0099, -0.0002, -0.0941), "quat": (0.7071, 0.0, 0.7071, 0.0),
-                "size": (0.010, 0.008, 0.002)},
-    "moving_jaw_so101_v1": {"pos": (-0.0101, -0.0707, 0.019), "quat": (-0.5, 0.5, -0.5, 0.5),
-                            "size": (0.010, 0.008, 0.002)},
+    "gripper": FingerPad(pos=(-0.0099, -0.0002, -0.0941), quat=(0.7071, 0.0, 0.7071, 0.0),
+                         size=(0.010, 0.008, 0.002)),
+    "moving_jaw_so101_v1": FingerPad(pos=(-0.0101, -0.0707, 0.019), quat=(-0.5, 0.5, -0.5, 0.5),
+                                     size=(0.010, 0.008, 0.002)),
 }
 FINGER_HULL_MESHES = ("wrist_roll_follower_so101_v1", "moving_jaw_so101_v1")
 # Contact parameters that make a friction grasp hold: MuJoCo's default soft

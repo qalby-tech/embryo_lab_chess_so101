@@ -3,22 +3,16 @@
     python examples/play_game.py --viewer              # live, real time, interactive camera
     python examples/play_game.py                       # 20-ply Giuoco Pianissimo, side-view video
     python examples/play_game.py --cameras external top wrist   # all views, side by side
-    python examples/play_game.py --moves e2e4 e7e5 --cameras top --out sim/out/e4e5.mp4
-    python examples/play_game.py --fen "4k3/8/4K3/8/8/8/1Q6/8" \
-        --moves b2b7 e8f8 e6f6 f8e8 b7e7 --out sim/out/ladder_mate.mp4
-
-`--viewer` needs a display (WSLg on WSL2 is fine); it opens on the first
-`--cameras` view and the mouse takes over from there. The window stays open
-after the last move until closed.
-Cameras: `external` (side view, easiest to follow), `top` (overhead mast
-camera) and `wrist` (gripper camera); the last two are what the real robot
-records. Any subset in any order is tiled left to right in the video.
+    python examples/play_game.py --fen "4k3/8/2n2q2/3p4/2B1P3/8/5R2/4K3" --moves e4d5 f2f6
 
 The arm plays both sides. Moves come from a fixed line here; swap in a chess
-engine (python-chess + Stockfish) to play a real game. The expert executes
-quiet moves only: captures, castling, promotion and en passant are not
-implemented yet. Measured on the default layout with the physical grasp: the
-20-ply line below executes 20/20 at 0.3-4.0 mm placement.
+engine (python-chess + Stockfish) to play a real game. A move onto an occupied
+square is executed as a real capture is: the piece standing there is lifted into
+the discard tray first, and only then does the capturing piece move in. Castling,
+promotion and en passant are not implemented.
+
+`--viewer` needs a display (WSLg on WSL2 is fine); it opens on the first
+`--cameras` view and the mouse takes over from there.
 """
 import argparse
 import time
@@ -28,9 +22,12 @@ import imageio.v2 as imageio
 import mujoco
 import numpy as np
 
-from chess_sim import ChessSimEnv, START_FEN
+from chess_sim import (START_FEN, Camera, CaptureTask, ChessSimEnv, ControlConfig, EnvConfig,
+                       MoveTask)
 
-DEMO_CAMERAS = ("external",)   # the side view is the easiest to follow; datasets never use it
+DEMO_CAMERAS = (Camera.EXTERNAL,)     # the side view is easiest to follow; datasets never use it
+IMAGE_SIZE = (960, 540)
+PAUSE_TICKS = 15                      # control steps of stillness between moves
 
 # Giuoco Pianissimo: 20 plies without a capture, castling or promotion
 GIUOCO_PIANISSIMO = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "c2c3", "g8f6",
@@ -42,29 +39,30 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--moves", nargs="*", default=GIUOCO_PIANISSIMO, help="UCI moves")
     ap.add_argument("--fen", default=START_FEN, help="starting position (board field)")
-    ap.add_argument("--cameras", nargs="+", default=list(DEMO_CAMERAS),
-                    choices=["external", "top", "wrist"],
-                    help="cameras to record, tiled left to right (default: external)")
+    ap.add_argument("--cameras", nargs="+", type=Camera, choices=list(Camera),
+                    default=list(DEMO_CAMERAS), help="cameras to record, tiled left to right")
     ap.add_argument("--out", default=None, help="video path (default sim/out/game.mp4 unless --viewer)")
     ap.add_argument("--viewer", action="store_true", help="play live in the MuJoCo viewer, in real time")
     args = ap.parse_args()
     if args.out is None and not args.viewer:
         args.out = "sim/out/game.mp4"
 
-    env = ChessSimEnv(cameras=tuple(args.cameras), image_size=(960, 540))
+    env = ChessSimEnv(EnvConfig(control=ControlConfig(cameras=tuple(args.cameras),
+                                                      image_size=IMAGE_SIZE)))
     env.reset(args.fen)
-    writer = imageio.get_writer(args.out, fps=30, macro_block_size=1) if args.out else None
+    writer = imageio.get_writer(args.out, fps=env.control_hz, macro_block_size=1) if args.out else None
     viewer = None
     if args.viewer:
         import mujoco.viewer
-        viewer = mujoco.viewer.launch_passive(env.model, env.data, show_left_ui=False, show_right_ui=False)
+        viewer = mujoco.viewer.launch_passive(env.model, env.data, show_left_ui=False,
+                                              show_right_ui=False)
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
-        viewer.cam.fixedcamid = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_CAMERA, args.cameras[0])
+        viewer.cam.fixedcamid = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_CAMERA,
+                                                  str(args.cameras[0]))
         viewer.sync()
-    period = 1.0 / env.control_hz
-    next_tick = time.perf_counter()
+    period, next_tick = 1.0 / env.control_hz, time.perf_counter()
 
-    def record(action):
+    def record(_action=None):
         nonlocal next_tick
         if writer is not None:
             writer.append_data(np.concatenate([env.render(cam) for cam in args.cameras], axis=1))
@@ -72,21 +70,31 @@ def main():
             if not viewer.is_running():
                 raise SystemExit("viewer closed")
             viewer.sync()
-            next_tick += period                       # pace the physics to real time
+            next_tick += period                   # pace the physics to real time
             time.sleep(max(0.0, next_tick - time.perf_counter()))
 
     played = 0
     for uci in args.moves:
-        mv = chess.Move.from_uci(uci)
-        san = env.board.san(mv)
-        result = env.move(chess.square_name(mv.from_square), chess.square_name(mv.to_square),
-                          on_step=record)
+        move = chess.Move.from_uci(uci)
+        san = env.position.san(move)
+        task = MoveTask.from_move(move)
+        if env.slot_at(task.to_square) is not None:
+            # a capture: clear the square into the tray, then move in
+            taken = env.execute(CaptureTask(square=task.to_square), on_step=record)
+            print(f"{'take ' + task.to_square:6s} {'ok' if taken.success else 'FAILED'} "
+                  f"({taken.placement_error * 1000:.1f} mm"
+                  f"{', ' + taken.reason if taken.reason else ''})")
+            for _ in range(PAUSE_TICKS):
+                record()
+        result = env.execute(task, on_step=record)
         played += result.success
         print(f"{san:6s} {'ok' if result.success else 'FAILED'} "
-              f"({result.placement_error * 1000:.1f} mm{', ' + result.reason if result.reason else ''})")
-        for _ in range(15):                       # a short pause between moves
-            record(None)
-    print(f"{played}/{len(args.moves)} moves executed; final position: {env.board.fen()}")
+              f"({result.placement_error * 1000:.1f} mm"
+              f"{', ' + result.reason if result.reason else ''})")
+        for _ in range(PAUSE_TICKS):
+            record()
+
+    print(f"{played}/{len(args.moves)} moves executed; final position: {env.position.fen()}")
     if writer is not None:
         writer.close()
         print("wrote", args.out)

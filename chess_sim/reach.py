@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import chess
 import numpy as np
 
-from .board import BoardSpec
+from .config import BoardConfig
 
 CALIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calib")
 EXECUTED_REACH_FILE = os.path.join(CALIB_DIR, "executed_reach.json")
@@ -45,12 +45,12 @@ class ReachMap:
     """Squares the scripted controller can grasp/place on, and how the wrist
     leans over the board there (to keep it clear of neighboring pieces)."""
 
-    board: BoardSpec
+    board: BoardConfig
     squares: set[int] = field(default_factory=set)
     lean: dict[int, np.ndarray] = field(default_factory=dict)   # wrist overhang direction
 
     @classmethod
-    def compute(cls, board: BoardSpec, tool_query, grasp_height: float,
+    def compute(cls, board: BoardConfig, tool_query, grasp_height: float,
                 executed: dict[int, float] | None = None) -> "ReachMap":
         """`tool_query(target) -> (IkResult, tool_rotation)` for a world target;
         the rotation's first column is the tool x (approach) axis."""

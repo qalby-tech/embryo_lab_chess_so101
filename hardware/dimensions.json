@@ -1,0 +1,104 @@
+{
+  "board": {
+    "square_mm": 28.0,
+    "border_mm": 15.0,
+    "thickness_mm": 12.0,
+    "playing_field_mm": 224.0,
+    "overall_mm": 254.0
+  },
+  "workstation": {
+    "table_top_mm": 430.0,
+    "arm_riser_mm": 60.0,
+    "board_edge_to_arm_base_mm": 80.0,
+    "arm_base_from_board_centre_mm": [
+      0.0,
+      -207.0
+    ],
+    "arm_base_footprint_mm": [
+      110.9,
+      72.0
+    ]
+  },
+  "capture_tray": {
+    "first_slot_from_board_centre_mm": [
+      -160.0,
+      -100.0
+    ],
+    "slot_pitch_mm": 40.0,
+    "slots": 4
+  },
+  "cameras": {
+    "mast_offset_from_arm_axis_mm": 160.0,
+    "mast_height_above_plate_mm": 600.0,
+    "mast_tube_mm": 30.0,
+    "lens_height_above_table_mm": 690.0,
+    "lens_height_above_board_mm": 678.0,
+    "simulated_vertical_fov_deg": 24.0,
+    "vertical_footprint_at_board_mm": 288.2,
+    "min_fov_to_see_whole_board_deg": 21.2,
+    "wrist_camera_offset_mm": [
+      -75.0,
+      45.0,
+      12.0
+    ],
+    "wrist_camera_fov_deg": 75.0
+  },
+  "pieces": [
+    {
+      "piece": "pawn",
+      "per_side": 8,
+      "height_mm": 27.2,
+      "widest_diameter_mm": 13.1,
+      "grasp_diameter_mm": 8.3,
+      "grasp_height_mm": 22.4
+    },
+    {
+      "piece": "rook",
+      "per_side": 2,
+      "height_mm": 30.4,
+      "widest_diameter_mm": 21.9,
+      "grasp_diameter_mm": 12.0,
+      "grasp_height_mm": 10.6
+    },
+    {
+      "piece": "knight",
+      "per_side": 2,
+      "height_mm": 33.6,
+      "widest_diameter_mm": 18.2,
+      "grasp_diameter_mm": 17.6,
+      "grasp_height_mm": 18.5
+    },
+    {
+      "piece": "bishop",
+      "per_side": 2,
+      "height_mm": 36.8,
+      "widest_diameter_mm": 13.4,
+      "grasp_diameter_mm": 12.1,
+      "grasp_height_mm": 20.2
+    },
+    {
+      "piece": "queen",
+      "per_side": 1,
+      "height_mm": 41.6,
+      "widest_diameter_mm": 22.1,
+      "grasp_diameter_mm": 12.7,
+      "grasp_height_mm": 34.3
+    },
+    {
+      "piece": "king",
+      "per_side": 1,
+      "height_mm": 46.4,
+      "widest_diameter_mm": 17.3,
+      "grasp_diameter_mm": 12.6,
+      "grasp_height_mm": 38.3
+    }
+  ],
+  "printable": [
+    "stl/arm_riser.stl",
+    "stl/mast_plate.stl",
+    "stl/mast_tube.stl",
+    "stl/capture_tray.stl"
+  ],
+  "parametric": "parts.scad",
+  "board_artwork": "board_254mm.png"
+}

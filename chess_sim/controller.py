@@ -82,7 +82,7 @@ class PickPlaceController:
         down on, defaulting to the board. They matter: the discard tray stands on
         the table, a board's thickness lower, and a piece released at board
         height there falls the difference and topples."""
-        env, board, g = self.env, self.env.board_spec, slot.geometry
+        env, board, g = self.env, self.env.board, slot.geometry
         px, py, _ = env.piece_position(slot)
         plan = grasp_plan(g, board)
         z_grasp, gap_open, gap_hold = plan.z_grasp, plan.gap_open, plan.gap_hold

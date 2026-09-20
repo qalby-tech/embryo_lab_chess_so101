@@ -8,18 +8,19 @@ import json
 import chess
 import numpy as np
 
-from chess_sim import ChessSimEnv
+from chess_sim import ChessSimEnv, ControlConfig, EnvConfig
+from chess_sim.env import GRASP_HEIGHT
 from chess_sim.reach import EXECUTED_REACH_FILE
 
 
 def main():
-    env = ChessSimEnv(cameras=())
+    env = ChessSimEnv(EnvConfig(control=ControlConfig(cameras=())))
     env.reset("8/8/8/8/8/8/8/8")
-    board = env.board_spec
+    board = env.board
     result, grid = {}, np.zeros((8, 8))
     for sq in chess.SQUARES:
         x, y = board.square_center(sq)
-        target = np.array([x, y, board.top + 0.016])
+        target = np.array([x, y, board.top + GRASP_HEIGHT])
         env.controller._go(target + [0, 0, 0.05], 0.03, np.zeros(3), 20, None)
         env.controller._go(target, 0.03, np.zeros(3), 12, None, precise=True)
         pos, _ = env.ik.tool_pose(env.data, np.zeros(3))

@@ -15,23 +15,26 @@ import mujoco
 import numpy as np
 
 from . import assets, gripper
-from .appearance import Appearance
 from .assets import SET_COUNTS, PieceGeometry, piece_asset_name, piece_geometry
-from .board import BoardSpec
+from .config import AppearanceConfig, BoardConfig, Camera, Config, JointPose
 
 ARM_PREFIX = "so101:"
 KEY_LIGHT_DIFFUSE = np.array([0.85, 0.82, 0.75])
-# The real SO-101 rig has exactly two cameras: the overhead camera on the mast
-# and a wrist camera on the gripper. Datasets record those; "external" is a
-# fixed side view for demos and debugging only.
-ROBOT_CAMERAS = ("top", "wrist")
-CAMERA_NAMES = ROBOT_CAMERAS + ("external",)
+class CameraMount(Config):
+    """Where a camera sits and what it looks at, in the frame it is mounted in."""
+
+    pos: tuple[float, float, float]
+    target: tuple[float, float, float]
+    up: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    fovy: float = 42
+
+
 # wrist camera in the gripperframe site frame (+x approach, +z jaw span):
 # beside the wrist-roll motor, looking at the fingertips, wide lens
-WRIST_CAMERA = {"pos": (-0.075, 0.045, 0.012), "target": (0.0, 0.0, 0.012),
-                "up": (-1.0, 0.0, 0.0), "fovy": 75}
-_ARM_REST = {"shoulder_pan": 0.0, "shoulder_lift": -1.0, "elbow_flex": 1.3,
-             "wrist_flex": 0.4, "wrist_roll": 0.0, "gripper": 0.6}
+WRIST_CAMERA = CameraMount(pos=(-0.075, 0.045, 0.012), target=(0.0, 0.0, 0.012),
+                           up=(-1.0, 0.0, 0.0), fovy=75)
+ARM_REST = JointPose(shoulder_pan=0.0, shoulder_lift=-1.0, elbow_flex=1.3,
+                     wrist_flex=0.4, wrist_roll=0.0, gripper=0.6)
 
 
 @dataclass(frozen=True)
@@ -55,7 +58,7 @@ SURFACE_SOLIMP = (0.999, 0.9999, 0.001, 0.5, 2.0)
 SURFACE_PRIORITY = 1
 
 
-def piece_slots(board: BoardSpec, piece_scale: float = 1.0) -> list[PieceSlot]:
+def piece_slots(board: BoardConfig, piece_scale: float = 1.0) -> list[PieceSlot]:
     """The fixed set of piece bodies, in a stable order."""
     slots = []
     for color in (chess.WHITE, chess.BLACK):
@@ -81,12 +84,12 @@ def _lookat_xyaxes(pos, target, up=(0.0, 0.0, 1.0)):
     return np.concatenate([right, up])
 
 
-def _add_camera(spec, name, pos, target, fovy=42, up=(0.0, 0.0, 1.0)):
-    spec.worldbody.add_camera(name=name, pos=list(pos),
+def _add_camera(spec, name: Camera, pos, target, fovy=42, up=(0.0, 0.0, 1.0)):
+    spec.worldbody.add_camera(name=str(name), pos=list(pos),
                               xyaxes=list(_lookat_xyaxes(pos, target, up)), fovy=fovy)
 
 
-def build_scene(board: BoardSpec = BoardSpec(), appearance: Appearance = Appearance()) -> mujoco.MjSpec:
+def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig = AppearanceConfig()) -> mujoco.MjSpec:
     """Assemble the MjSpec. Mesh/texture paths are relative to the assets dir."""
     board_texture = assets.ensure_scene_assets(board, appearance)
     spec = mujoco.MjSpec()
@@ -113,11 +116,11 @@ def build_scene(board: BoardSpec = BoardSpec(), appearance: Appearance = Appeara
     _add_arm(spec, board)
     camera_pos = _add_camera_mast(spec, board)
 
-    _add_camera(spec, "external", (-0.31, -0.16, board.top + 0.26), (0.0, 0.02, board.top + 0.04))
+    _add_camera(spec, Camera.EXTERNAL, (-0.31, -0.16, board.top + 0.26), (0.0, 0.02, board.top + 0.04))
     # the overhead image is upright along the files (white at the bottom) and
     # framed on the board: at this distance the board fills ~86% of the frame
     # height, which is what a policy needs to tell one square from another
-    _add_camera(spec, "top", camera_pos, (0.0, 0.0, board.top), fovy=24, up=(0.0, 1.0, 0.0))
+    _add_camera(spec, Camera.TOP, camera_pos, (0.0, 0.0, board.top), fovy=24, up=(0.0, 1.0, 0.0))
     return spec
 
 
@@ -230,7 +233,7 @@ def _add_pieces(spec, board, appearance):
                           rgba=[1, 1, 1, 0], density=600)
 
 
-def build_arm(board: BoardSpec = BoardSpec()) -> mujoco.MjSpec:
+def build_arm(board: BoardConfig = BoardConfig()) -> mujoco.MjSpec:
     """The SO-101 alone, mounted exactly as in the scene (same names): the
     kinematic model the IK solves on, 33x fewer degrees of freedom."""
     spec = mujoco.MjSpec()
@@ -253,7 +256,7 @@ def _add_arm(spec, board):
             if geom.meshname in gripper.FINGER_HULL_MESHES and geom.contype != 0:
                 geom.contype = 0
                 geom.conaffinity = 0
-        quat = np.array(pad["quat"], dtype=float)
+        quat = np.array(pad.quat, dtype=float)
         if body_name == "moving_jaw_so101_v1":
             # undo the hinge rotation the pad will have at the nominal grasp angle
             comp = np.zeros(4)
@@ -262,7 +265,7 @@ def _add_arm(spec, board):
             mujoco.mju_mulQuat(out, comp, quat)
             quat = out
         body.add_geom(name=f"{body_name}_pad", type=mujoco.mjtGeom.mjGEOM_BOX,
-                      pos=list(pad["pos"]), quat=list(quat), size=list(pad["size"]),
+                      pos=list(pad.pos), quat=list(quat), size=list(pad.size),
                       friction=list(gripper.PAD_FRICTION), solref=list(gripper.PAD_SOLREF),
                       solimp=list(gripper.PAD_SOLIMP), condim=gripper.PAD_CONDIM,
                       priority=gripper.PAD_PRIORITY, rgba=[0.1, 0.1, 0.1, 1], group=3)
@@ -280,19 +283,19 @@ def _add_wrist_camera(spec):
     mujoco.mju_quat2Mat(rot, np.asarray(site.quat, dtype=float))
     rot = rot.reshape(3, 3)                      # site axes in the gripper body frame
     cam = WRIST_CAMERA
-    pos = np.asarray(site.pos, dtype=float) + rot @ np.asarray(cam["pos"], dtype=float)
-    axes = _lookat_xyaxes(cam["pos"], cam["target"], cam["up"])
+    pos = np.asarray(site.pos, dtype=float) + rot @ np.asarray(cam.pos, dtype=float)
+    axes = _lookat_xyaxes(cam.pos, cam.target, cam.up)
     xyaxes = np.concatenate([rot @ axes[:3], rot @ axes[3:]])
     gripper = spec.body(ARM_PREFIX + "gripper")
-    gripper.add_camera(name="wrist", pos=list(pos), xyaxes=list(xyaxes), fovy=cam["fovy"])
+    gripper.add_camera(name=str(Camera.WRIST), pos=list(pos), xyaxes=list(xyaxes), fovy=cam.fovy)
     gripper.add_geom(name="wrist_camera", type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.012, 0.012, 0.008],
                      pos=list(pos - rot @ np.array([0.01, 0.0, 0.0])),
                      rgba=[0.08, 0.08, 0.08, 1], contype=0, conaffinity=0, group=1, density=0)
 
 
-def arm_rest_pose() -> dict[str, float]:
+def arm_rest_pose() -> JointPose:
     """Parked joint targets (name -> radians), keys without the scene prefix."""
-    return dict(_ARM_REST)
+    return ARM_REST
 
 
 def export_xml(spec: mujoco.MjSpec, path: str, model: mujoco.MjModel | None = None,

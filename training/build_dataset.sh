@@ -17,7 +17,7 @@ collect () {   # task, episodes, out
   [ "$have" -ge "$2" ] && { echo "$3 already has $have episodes"; return; }
   # An interrupted collection resumes: new shards get new seeds, so only the
   # shortfall is recorded, not the whole count on top of what is there.
-  $PY -u examples/collect_dataset.py --episodes $(( $2 - have )) --workers "$WORKERS" --chunk 25 \
+  $PY -u examples/collect_demonstrations.py --episodes $(( $2 - have )) --workers "$WORKERS" --chunk 25 \
       --randomize --task "$1" --out "$3"
 }
 collect move    "$EPISODES_MOVE"    "$MOVE_RECORDINGS"
@@ -25,7 +25,7 @@ collect capture "$EPISODES_CAPTURE" "$CAPTURE_RECORDINGS"
 
 # Only verified successes are exported; ~99% of recordings qualify.
 rm -rf "$DATASET_ROOT"
-$PY -u examples/export_lerobot.py \
+$PY -u examples/export_dataset.py \
     --in "$MOVE_RECORDINGS" "$CAPTURE_RECORDINGS" \
     --repo-id "$REPO_ID" --root "$DATASET_ROOT" \
     --stride "$STRIDE" --encoder-threads 8

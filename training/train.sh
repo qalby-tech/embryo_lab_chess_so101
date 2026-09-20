@@ -14,12 +14,12 @@ PY=${PYTHON:-$(command -v python || command -v python3)}   # a venv has "python"
 # Video dataloading opens more descriptors than the usual 1024 default allows.
 ulimit -n 65536 2>/dev/null || true
 
-exec $PY -u examples/train_select_molmoact2.py \
+exec $PY -u examples/train_policy.py \
   --root "$DATASET_ROOT" --repo-id "$REPO_ID" --out "$OUTPUT_DIR" \
   --total-steps "$TOTAL_STEPS" --block "$BLOCK" \
   --batch-size "$BATCH_SIZE" --grad-accum "${GRAD_ACCUM:-1}" \
   --num-workers "${NUM_WORKERS:-4}" \
   --eval-episodes "$EVAL_EPISODES" --eval-captures "${EVAL_CAPTURES:-0}" \
   --eval-max-steps "$EVAL_MAX_STEPS" \
-  $([ "${INTERPOLATE:-1}" = "1" ] && echo --interpolate) \
+  $([ "${INTERPOLATE:-1}" = "1" ] || echo --no-interpolate) \
   "$@"

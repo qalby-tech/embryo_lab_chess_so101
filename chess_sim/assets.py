@@ -130,7 +130,7 @@ def _radius_at(path: str, fraction: float) -> float:
 
 def piece_geometry(piece: chess.Piece, square: float, piece_scale: float = 1.0) -> PieceGeometry:
     """Scale a piece to the board: target height, footprint capped to the square;
-    `piece_scale` multiplies both (see `Appearance`)."""
+    `piece_scale` multiplies both (see `AppearanceConfig`)."""
     path = piece_obj_path(piece)
     lo, hi = _bounds(path)
     extent = hi - lo

@@ -1,6 +1,6 @@
 """Push a local LeRobot dataset to the Hugging Face Hub and file it in a collection.
 
-    python examples/push_lerobot.py --root datasets/lerobot/chess_v2 \
+    python examples/push_dataset.py --root datasets/lerobot/chess_mc \
         --repo-id XvKuoMing/so101_chess --collection so101_datasets
 
 Runs in the VLA environment. Credentials come from the Hugging Face token
@@ -8,15 +8,17 @@ store (`huggingface-cli login`); no token is read from this repository.
 """
 import argparse
 
-from huggingface_hub import HfApi, add_collection_item, create_collection, list_collections
+from huggingface_hub import add_collection_item, create_collection, list_collections
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+from chess_sim.hub import DATASET_REPO
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, help="local LeRobot dataset directory")
-    ap.add_argument("--repo-id", required=True, help="e.g. user/so101_chess")
+    ap.add_argument("--repo-id", default=DATASET_REPO, help="e.g. user/so101_chess")
     ap.add_argument("--collection", default=None, help="collection title to add the dataset to")
     ap.add_argument("--private", action="store_true")
     ap.add_argument("--tags", nargs="*", default=["robotics", "so101", "chess", "mujoco", "lerobot"])

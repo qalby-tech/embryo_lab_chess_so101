@@ -1,7 +1,7 @@
 [project]
 name = "chess_sim"
 version = "0.1.0"
-description = "MuJoCo framework for an SO-101 arm playing chess: sim-ready assets, scripted expert, dataset recording"
+description = "MuJoCo framework for an SO-101 arm playing chess: sim-ready assets, scripted expert, datasets, policy evaluation"
 requires-python = ">=3.10"
 dependencies = [
     "mujoco>=3.10",
@@ -12,6 +12,7 @@ dependencies = [
     "trimesh>=4.0",
     "pillow>=9.0",
     "imageio[ffmpeg]>=2.30",
+    "pydantic>=2.0",
 ]
 
 [tool.setuptools]
