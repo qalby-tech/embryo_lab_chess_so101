@@ -31,7 +31,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True, help="the policy whose failures to correct")
     ap.add_argument("--dataset-root", default=None, help="read for the rate it emits targets at")
-    ap.add_argument("--episodes", type=int, default=100)
+    ap.add_argument("--episodes", type=int, default=100, help="episodes to attempt at most")
+    ap.add_argument("--corrections", type=int, default=None,
+                    help="stop once this many usable corrections are recorded")
     ap.add_argument("--task", type=TaskFamily, choices=list(TaskFamily), default=TaskFamily.CAPTURE)
     ap.add_argument("--out", default="datasets/chess_recoveries")
     ap.add_argument("--seed", type=int, default=500)
@@ -67,10 +69,13 @@ def main():
         else:
             triggers[str(outcome.trigger)] += 1
             recovered += outcome.result.success
-        print(f"[{index + 1}/{args.episodes}] {task.label}: "
+        print(f"[{index + 1}/{args.episodes}] {recovered} usable | {task.label}: "
               f"{outcome.trigger or 'no correction needed'} after {outcome.prefix_steps} steps"
               + (f" -> expert {'fixed it' if outcome.result.success else 'failed too'}"
                  if outcome.result else ""), flush=True)
+        if args.corrections and recovered >= args.corrections:
+            print(f"reached {recovered} corrections", flush=True)
+            break
 
     print(f"\n{recovered} usable corrections from {args.episodes} episodes "
           f"({policy_ok} the policy got right on its own)")
