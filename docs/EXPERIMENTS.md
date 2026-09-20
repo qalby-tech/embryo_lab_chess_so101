@@ -309,9 +309,10 @@ four is not 1,252.
 MolmoAct2 predicts a 30-action chunk and `select_action` pops one action per call, regenerating
 only when the queue empties. With targets held for three control steps, one forward pass covered
 90 control steps - **three seconds** - and about five forwards ran in a 450-step episode. Executing
-only the first five actions of each chunk and re-planning scores **82% against 75%** on the same
-128 positions and halves dropped pieces (8 against 19, paired McNemar **p = 0.043**), with the
-median placement error unchanged at 5.1 mm. No retraining: one config field, and five seconds more
+only the first five actions of each chunk and re-planning scored **82% against 75%** on the same
+128 positions and halved dropped pieces (8 against 19, paired McNemar **p = 0.043**), with the
+median placement error unchanged at 5.1 mm. A 300-position re-run (§5.7) puts the overall gap at
+four points rather than seven, and locates all of it in captures. No retraining: one config field, and five seconds more
 per episode.
 
 The curve is not monotone, and the far end is catastrophic:
@@ -334,14 +335,30 @@ Protocol note: these comparisons replay identical positions in every arm and are
 tests, because at 80% on 128 episodes the unpaired interval is ±7 points - wider than every
 difference in the table.
 
-### 5.7 More flow-matching steps buy nothing
+### 5.7 The horizon is a capture fix, not a general one - and flow steps buy nothing
 
-Each action chunk is drawn by integrating a flow field, ten steps by default. If
-sampling noise were what costs the policy its failures, integrating more finely should
-recover some of them. It does not.
+§5.6 read a 128-position run as "five actions per call beats thirty, 82% against 75%".
+Re-run on 300 positions per arm, every arm facing the identical board, shift and start
+pose, that gap shrinks to 80% against 76% and stops being significant on its own
+(paired 52 to 38, p = 0.17). Split by what the arm was asked to do, the reason is plain:
 
-Scored on 100 positions, every setting facing the identical board, board shift and arm
-start pose, 450 control steps, two thirds moves and one third captures:
+| | five per call | thirty per call | paired |
+| --- | --- | --- | --- |
+| moves (200 positions) | 156/200 (78%) | 159/200 (80%) | 29 to 32, p = 0.80 |
+| captures (100 positions) | **85/100 (85%)** | 68/100 (68%) | 23 to 6, **p = 0.002** |
+
+The horizon does nothing for a move and a great deal for a capture. The failure counts
+say why: "still on the board" - the piece never reaches the tray - happens 24 times at
+thirty actions per call and 10 times at five. A capture is the longer trajectory, out
+past the board edge and down into a slot, and three seconds of open-loop motion is
+where it dies. A move is short enough that one chunk covers it.
+
+It is not free: five actions per call means 30 model calls in a 450-step episode against
+5, and at 0.8-3.3 s per call (measured on a 5090) that is the difference between a loop
+that can keep up with a 30 Hz arm and one that cannot. In simulation nothing is waiting,
+so five is the better setting; on hardware the arm does not pause for inference.
+
+Also measured, and worth the negative result:
 
 | flow-matching steps per chunk | success (100 positions) | paired against 10 |
 | --- | --- | --- |
@@ -349,15 +366,10 @@ start pose, 450 control steps, two thirds moves and one third captures:
 | 20 | 82/100 (82%) | 10 against 12, p = 0.83 |
 | 40 | 82/100 (82%) | 11 against 13, p = 0.84 |
 
-Two episodes either way, on a comparison that would show a real four-point difference:
-the extra integration costs two to four times the inference time and returns nothing.
-The default stands.
-
-The same run re-measured the open-loop horizon on those positions (§5.6): five actions
-per call **80/100** against thirty **69/100**, paired 23 wins to 12, p = 0.090 - the same
-direction as the 128-position result, and pooled with it the case for five is settled.
-`tools/sweep_inference.py` produced both; it scores every arm on the same positions in
-one process, because loading the checkpoint costs more than the episodes do.
+Two episodes either way: integrating the flow more finely costs two to four times the
+inference and returns nothing. `tools/sweep_inference.py` produced all of this - it scores
+every arm on the same positions in one process, because loading the checkpoint costs more
+than the episodes do.
 
 ## 6. Metrics — and a correction
 

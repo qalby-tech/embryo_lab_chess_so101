@@ -28,9 +28,10 @@ from .conventions import SO101_DEGREES, JointConvention
 from .env import Observation
 from .tasks import Task
 
-# Measured (docs/EXPERIMENTS.md 5.6): executing 5 actions of the 30-action chunk
-# scores 82% against 75% for the whole chunk, with half the dropped pieces
-# (128 paired positions, McNemar p=0.043). The published checkpoint still ships 30.
+# Measured on 300 paired positions (docs/EXPERIMENTS.md 5.7): executing 5 actions of
+# the 30-action chunk is worth 17 points on captures (85% against 68%, p=0.002) and
+# nothing on moves (78% against 80%). It costs six times the model calls, so a loop
+# that has to keep up with a 30 Hz arm may want the checkpoint's own 30 instead.
 DEFAULT_ACTION_STEPS = 5
 DEFAULT_TARGET_HZ = 10          # the strided export's frame rate
 PIXEL_MAX = 255.0

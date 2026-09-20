@@ -147,18 +147,22 @@ from chess_sim.hub import MODEL_REPO       # 'XvKuoMing/so101_chess'
 policy = LeRobotPolicy.load(LeRobotPolicyConfig.for_dataset(
     checkpoint=MODEL_REPO,                        # or a local checkpoint directory
     dataset_root="datasets/lerobot/chess_mc",     # read for the rate it emits targets at
-    n_action_steps=5,                             # measured: 82% against 75% for the full chunk
+    n_action_steps=5,                             # +17 points on captures, nothing on moves
     interpolate=True))
 
 task = MoveSampler().sample(env, random.Random(100))
 result = run_episode(env, policy, task, RolloutConfig(max_steps=450))
 ```
 
-Two knobs decide how a chunked policy behaves, and both live on the config:
-`n_action_steps` (how much of a 30-action chunk to execute before looking again)
-and `interpolate` (ramp to each emitted target instead of stepping to it, worth
-12/16 -> 16/16 on the same checkpoint). The published `config.json` still says
-30 actions; the API defaults to 5.
+Two knobs decide how a chunked policy behaves, and both live on the config.
+`interpolate` ramps to each emitted target instead of stepping to it, worth
+12/16 -> 16/16 on the same checkpoint. `n_action_steps` is how much of a
+30-action chunk to execute before looking again: on 300 paired positions, 5
+instead of 30 is worth 17 points on captures (85% against 68%, p = 0.002) and
+nothing at all on moves (78% against 80%) - a capture is the longer trajectory,
+and three seconds of open-loop motion is where it dies. It costs six times the
+model calls, so keep the checkpoint's 30 if the loop has to keep up with a
+moving arm. The published `config.json` ships 30; the API defaults to 5.
 
 What a call costs, measured on the 70,000-step checkpoint (RTX 5090, another
 job sharing the machine, so read these as upper bounds): loading the checkpoint
