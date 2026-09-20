@@ -61,6 +61,9 @@ def main():
     ap.add_argument("--root", default="datasets/lerobot/chess_mc")
     ap.add_argument("--repo-id", default=DATASET_REPO)
     ap.add_argument("--out", default="outputs/molmoact2_mc")
+    ap.add_argument("--base-checkpoint", default=None,
+                    help="weights to start from; a local checkpoint warm-restarts a run on new "
+                         "data instead of beginning again from the pretrained arm policy")
     ap.add_argument("--total-steps", type=int, default=70000)
     ap.add_argument("--block", type=int, default=10000, help="steps between evaluations")
     ap.add_argument("--batch-size", type=int, default=8)
@@ -76,10 +79,13 @@ def main():
     ap.add_argument("--eval-max-steps", type=int, default=450)
     args = ap.parse_args()
 
-    config = MolmoAct2TrainConfig(dataset_root=args.root, repo_id=args.repo_id, output_dir=args.out,
-                                  total_steps=args.total_steps, batch_size=args.batch_size,
-                                  grad_accum=args.grad_accum, num_workers=args.num_workers,
-                                  save_every=min(args.save_every, args.block))
+    settings = {"dataset_root": args.root, "repo_id": args.repo_id, "output_dir": args.out,
+                "total_steps": args.total_steps, "batch_size": args.batch_size,
+                "grad_accum": args.grad_accum, "num_workers": args.num_workers,
+                "save_every": min(args.save_every, args.block)}
+    if args.base_checkpoint:
+        settings["base_checkpoint"] = args.base_checkpoint
+    config = MolmoAct2TrainConfig(**settings)
     best_path = os.path.join(args.out, BEST)
     best = CheckpointScore.load(best_path)
     done = max((int(tag) for tag in config.complete_checkpoints()), default=0)
