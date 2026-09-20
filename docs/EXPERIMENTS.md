@@ -327,12 +327,37 @@ The curve is not monotone, and the far end is catastrophic:
 Each chunk is drawn from fresh noise, so re-planning often replaces one committed motion with many
 disagreeing ones; at one action per call the arm never commits to a grasp at all. A fifth of the
 chunk is the best of the settings tried. Sampling noise is the other half of this story - the same
-weights on the same 128 positions disagree with themselves on 45 of them - and whether more
-flow-matching steps (the default is 10) settle it is untested.
+weights on the same 128 positions disagree with themselves on 45 of them - and more
+flow-matching steps do not settle it (§5.7).
 
 Protocol note: these comparisons replay identical positions in every arm and are read with paired
 tests, because at 80% on 128 episodes the unpaired interval is ±7 points - wider than every
 difference in the table.
+
+### 5.7 More flow-matching steps buy nothing
+
+Each action chunk is drawn by integrating a flow field, ten steps by default. If
+sampling noise were what costs the policy its failures, integrating more finely should
+recover some of them. It does not.
+
+Scored on 100 positions, every setting facing the identical board, board shift and arm
+start pose, 450 control steps, two thirds moves and one third captures:
+
+| flow-matching steps per chunk | success (100 positions) | paired against 10 |
+| --- | --- | --- |
+| 10 (default) | 80/100 (80%) | - |
+| 20 | 82/100 (82%) | 10 against 12, p = 0.83 |
+| 40 | 82/100 (82%) | 11 against 13, p = 0.84 |
+
+Two episodes either way, on a comparison that would show a real four-point difference:
+the extra integration costs two to four times the inference time and returns nothing.
+The default stands.
+
+The same run re-measured the open-loop horizon on those positions (§5.6): five actions
+per call **80/100** against thirty **69/100**, paired 23 wins to 12, p = 0.090 - the same
+direction as the 128-position result, and pooled with it the case for five is settled.
+`tools/sweep_inference.py` produced both; it scores every arm on the same positions in
+one process, because loading the checkpoint costs more than the episodes do.
 
 ## 6. Metrics — and a correction
 
