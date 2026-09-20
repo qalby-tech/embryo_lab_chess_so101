@@ -1,4 +1,10 @@
 {
+  "figures": [
+    "docs/media/rig_plan.svg",
+    "docs/media/rig_elevation.svg",
+    "docs/media/rig_overview.png",
+    "docs/media/rig_top.png"
+  ],
   "board": {
     "square_mm": 28.0,
     "border_mm": 15.0,

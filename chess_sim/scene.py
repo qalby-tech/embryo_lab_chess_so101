@@ -19,6 +19,9 @@ from .assets import SET_COUNTS, PieceGeometry, piece_asset_name, piece_geometry
 from .config import AppearanceConfig, BoardConfig, Camera, Config, JointPose
 
 ARM_PREFIX = "so101:"
+# MuJoCo caps offscreen rendering at these; the default 640x480 is too small for a
+# printable figure, and a bigger buffer costs nothing until something asks for it
+OFFSCREEN_SIZE = (1280, 960)
 KEY_LIGHT_DIFFUSE = np.array([0.85, 0.82, 0.75])
 class CameraMount(Config):
     """Where a camera sits and what it looks at, in the frame it is mounted in."""
@@ -121,6 +124,8 @@ def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig
     # framed on the board: at this distance the board fills ~86% of the frame
     # height, which is what a policy needs to tell one square from another
     _add_camera(spec, Camera.TOP, camera_pos, (0.0, 0.0, board.top), fovy=24, up=(0.0, 1.0, 0.0))
+    # last, because merging the arm's MJCF brings that model's visual settings with it
+    spec.visual.global_.offwidth, spec.visual.global_.offheight = OFFSCREEN_SIZE
     return spec
 
 

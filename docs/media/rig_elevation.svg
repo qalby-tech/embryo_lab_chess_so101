@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1174" height="1952" viewBox="-377.0 0.0 734.0 1220.0" font-family="DejaVu Sans, Arial, sans-serif">
+  <rect x="-377.0" y="0.0" width="734.0" height="1220.0" fill="#ffffff"/>
+  <line x1="-327.0" y1="1180.0" x2="217.0" y2="1180.0" stroke="#44484d" stroke-width="1.5"/>
+  <text x="-307.0" y="1194.0" font-size="9" text-anchor="start" fill="#22252a">floor</text>
+  <rect x="-297.0" y="750.0" width="277.0" height="18" fill="#d8dee6" stroke="#44484d"/>
+  <text x="167.0" y="780.0" font-size="9" text-anchor="middle" fill="#22252a">table top 430</text>
+  <rect x="-127.0" y="738.0" width="254.0" height="12.0" fill="#e8d5b0" stroke="#44484d"/>
+  <text x="0.0" y="732.0" font-size="9" text-anchor="middle" fill="#22252a">board, 12 thick</text>
+  <rect x="-10.0" y="691.6" width="20" height="46.4" rx="6" fill="#f3f0ea" stroke="#44484d"/>
+  <text x="40.0" y="701.6" font-size="8" text-anchor="start" fill="#22252a">king 46</text>
+  <rect x="-243.0" y="690.0" width="72" height="60.0" fill="#d8dee6" stroke="#44484d"/>
+  <text x="-251.0" y="720.0" font-size="9" text-anchor="end" fill="#22252a">riser 60</text>
+  <circle cx="-207.0" cy="672.0" r="18" fill="#2f6f4f" opacity="0.85"/>
+  <text x="-207.0" y="630.0" font-size="9" text-anchor="middle" fill="#22252a">SO-101</text>
+  <rect x="-163.0" y="80.0" width="30.0" height="600.0" fill="#44484d"/>
+  <rect x="-177.0" y="44.0" width="58" height="26" rx="4" fill="#2f6f4f"/>
+  <text x="-107.0" y="60.0" font-size="9" text-anchor="start" fill="#22252a">overhead camera</text>
+  <line x1="-148.0" y1="60.0" x2="-127.0" y2="738.0" stroke="#2f6f4f" stroke-width="0.7" stroke-dasharray="5 4"/>
+  <line x1="-148.0" y1="60.0" x2="127.0" y2="738.0" stroke="#2f6f4f" stroke-width="0.7" stroke-dasharray="5 4"/>
+  <line x1="-267.0" y1="750.0" x2="-267.0" y2="60.0" stroke="#2f6f4f" stroke-width="0.8" stroke-dasharray="4 3"/>
+  <text x="-267.0" y="402.0" font-size="9" text-anchor="middle" fill="#2f6f4f">690 lens above table</text>
+  <line x1="187.0" y1="750.0" x2="187.0" y2="738.0" stroke="#2f6f4f" stroke-width="0.8" stroke-dasharray="4 3"/>
+  <text x="187.0" y="741.0" font-size="9" text-anchor="middle" fill="#2f6f4f">12</text>
+</svg>

@@ -15,6 +15,7 @@ are published:
 | showcase | [moves](https://huggingface.co/XvKuoMing/so101_chess/resolve/main/media/reel_moves.mp4) · [captures](https://huggingface.co/XvKuoMing/so101_chess/resolve/main/media/reel_captures.mp4) |
 | experiment record | [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) |
 | worked examples | [docs/COOKBOOK.md](docs/COOKBOOK.md) |
+| building the rig | [docs/hardware.md](docs/hardware.md) |
 
 Both are reachable in code as `chess_sim.hub.MODEL_REPO` / `DATASET_REPO`.
 
@@ -59,6 +60,7 @@ examples/           play_expert.py, play_game.py, collect_demonstrations.py, exp
                     train_policy.py, train_rl.py, evaluate_policy.py, push_dataset.py,
                     calibrate_reach.py
 hardware/           the physical build: dimensions, printable parts, 1:1 board artwork
+docs/               EXPERIMENTS.md (what was measured), COOKBOOK.md, hardware.md
 ```
 
 ## Quick start
@@ -195,13 +197,19 @@ python examples/push_dataset.py --root datasets/lerobot/chess_mc --collection so
 `training/settings.env`. Steps 2–5 need the VLA environment (Python 3.12 with
 `lerobot`); point `PYTHONPATH` at this repo so they can import `chess_sim`.
 
-## Building one
+## Hardware
 
-`hardware/` holds the physical counterpart of the simulated rig: board and piece
-dimensions, the workstation layout, the camera mast, printable STLs, a
-parametric `parts.scad` and the board artwork at 1:1. Everything there is
-generated from `chess_sim` by `hardware/generate.py`, so the rig matches the
-scene the policy trained in. Nothing in it has been built and measured yet.
+![The rig](docs/media/rig_overview.png)
+
+[docs/hardware.md](docs/hardware.md) is the build guide: scale drawings of the
+layout and the heights, what to buy, what to print, the board artwork at 1:1,
+piece dimensions, where the cameras go and what they must see, and the assembly
+order. Everything in it is generated from `chess_sim` by `hardware/generate.py`,
+so the bench matches the scene the policy trained in - change a dimension in
+`chess_sim/config.py` and re-run it.
+
+Nothing there has been built and measured on a physical bench yet; the
+sim-to-real gap is unmeasured.
 
 ## Design notes
 

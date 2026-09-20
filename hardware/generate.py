@@ -8,18 +8,21 @@ Re-run it after changing any dimension in `chess_sim/config.py` or `scene.py`.
 """
 from __future__ import annotations
 
+import argparse
 import os
 
 import chess
 import numpy as np
 import trimesh
 
-from chess_sim import BoardConfig, Config
+from chess_sim import BoardConfig, Camera, ChessSimEnv, Config, ControlConfig, EnvConfig, START_FEN
+from diagrams import write_elevation, write_plan
 from chess_sim.assets import ASSET_DIR, SET_COUNTS, piece_geometry
 from chess_sim.scene import (MAST_HEIGHT, MAST_SIDE, MAST_WIDTH, WRIST_CAMERA)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STL_DIR = os.path.join(HERE, "stl")
+MEDIA_DIR = os.path.join(os.path.dirname(HERE), "docs", "media")
 MM = 1000.0
 TOP_CAMERA_FOVY = 24          # degrees, as built in scene.py
 MAST_PLATE_THICKNESS = 0.010  # scene.py: the plate under the arm base
@@ -76,6 +79,8 @@ class CameraSheet(Config):
 
 class BuildSheet(Config):
     """Everything needed to build the rig, in millimetres."""
+
+    figures: list[str] = []
 
     board: BoardSheet
     workstation: WorkstationSheet
@@ -232,7 +237,41 @@ def write_scad(board: BoardConfig, base_x: float, base_y: float) -> str:
     return os.path.relpath(path, HERE)
 
 
+def write_figures(board: BoardConfig, render: bool) -> list[str]:
+    """Scale drawings, and photographs of the scene they describe."""
+    os.makedirs(MEDIA_DIR, exist_ok=True)
+    written = []
+    for name, draw in (("rig_plan.svg", write_plan), ("rig_elevation.svg", write_elevation)):
+        draw(board, os.path.join(MEDIA_DIR, name))
+        written.append(f"docs/media/{name}")
+    if render:
+        import imageio.v2 as imageio
+        import mujoco
+
+        env = ChessSimEnv(EnvConfig(control=ControlConfig(
+            cameras=(Camera.TOP,), image_size=(1100, 800))))
+        env.reset(START_FEN)
+        # a free camera set back far enough to take in the table, the arm and the mast,
+        # which the scene's own demo view is too close for
+        wide = mujoco.MjvCamera()
+        wide.type = mujoco.mjtCamera.mjCAMERA_FREE
+        wide.lookat[:] = [0.02, -0.10, board.table_top + 0.26]
+        wide.distance, wide.azimuth, wide.elevation = 1.35, -128, -12
+        env.render(Camera.TOP)                      # builds the renderer
+        env._renderer.update_scene(env.data, camera=wide)
+        imageio.imwrite(os.path.join(MEDIA_DIR, "rig_overview.png"), env._renderer.render())
+        written.append("docs/media/rig_overview.png")
+        imageio.imwrite(os.path.join(MEDIA_DIR, "rig_top.png"), env.render(Camera.TOP))
+        written.append("docs/media/rig_top.png")
+        env.close()
+    return written
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--no-render", action="store_true",
+                        help="skip the simulator photographs (the drawings still get written)")
+    args = parser.parse_args()
     board = BoardConfig()
     base_x, base_y = arm_base_footprint()
     sheet = BuildSheet(
@@ -255,7 +294,8 @@ def main() -> None:
         pieces=piece_table(board),
         printable=write_stls(board, base_x, base_y),
         parametric=write_scad(board, base_x, base_y),
-        board_artwork=write_board_artwork(board))
+        board_artwork=write_board_artwork(board),
+        figures=write_figures(board, render=not args.no_render))
     with open(os.path.join(HERE, "dimensions.json"), "w") as f:
         f.write(sheet.model_dump_json(indent=2))
     print(sheet.model_dump_json(indent=2))
