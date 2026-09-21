@@ -42,6 +42,9 @@ def main():
                     help="flow-matching steps per action chunk; more costs time and cuts sampling noise")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--video", default=None, help="record the episodes to this mp4")
+    ap.add_argument("--video-cameras", nargs="+", type=Camera, choices=list(Camera),
+                    default=[Camera.EXTERNAL, Camera.TOP],
+                    help="views tiled left to right; 'top wrist' is exactly what the policy sees")
     ap.add_argument("--report", default=None, help="write the full report as JSON to this path")
     args = ap.parse_args()
 
@@ -51,8 +54,9 @@ def main():
         interpolate=not args.no_interpolate, n_action_steps=args.n_action_steps or None,
         num_inference_steps=args.num_inference_steps)
     policy = LeRobotPolicy.load(policy_config)
-    # the env renders exactly what this checkpoint asks for, plus the side view for the video
-    cameras = policy.cameras + (Camera.EXTERNAL,) if args.video else policy.cameras
+    # the env renders exactly what this checkpoint asks for, plus any other view the video wants
+    extra = tuple(c for c in (args.video_cameras if args.video else []) if c not in policy.cameras)
+    cameras = policy.cameras + extra
     env = ChessSimEnv(EnvConfig(control=control.model_copy(update={"cameras": cameras})))
     print(f"{policy.policy_type}: executing {policy.action_steps} of {policy.chunk_size} actions "
           f"per model call; targets held for {policy_config.hold} control steps"
@@ -65,8 +69,7 @@ def main():
 
     def record(_action):
         if writer is not None:
-            writer.append_data(np.concatenate([env.render(Camera.EXTERNAL),
-                                               env.render(Camera.TOP)], axis=1))
+            writer.append_data(np.concatenate([env.render(cam) for cam in args.video_cameras], axis=1))
 
     only = tuple(m.strip() for m in args.only_moves.split(",")) if args.only_moves else ()
     randomize = not args.nominal_layout
