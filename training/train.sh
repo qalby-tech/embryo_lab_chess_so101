@@ -3,7 +3,7 @@
 # complete checkpoint, so re-running after any interruption continues the run.
 set -e
 cd "$(dirname "$0")/.."
-source training/settings.env
+source "${SETTINGS:-training/settings.env}"   # another settings file for another run
 PY=${PYTHON:-$(command -v python || command -v python3)}   # a venv has "python"; a bare host may not
 
 [ -f "$DATASET_ROOT/.export-complete" ] || {
@@ -22,4 +22,5 @@ exec $PY -u examples/train_policy.py \
   --eval-episodes "$EVAL_EPISODES" --eval-captures "${EVAL_CAPTURES:-0}" \
   --eval-max-steps "$EVAL_MAX_STEPS" \
   $([ "${INTERPOLATE:-1}" = "1" ] || echo --no-interpolate) \
+  $([ -n "${INIT_FROM:-}" ] && echo --init-from "$INIT_FROM") \
   "$@"
