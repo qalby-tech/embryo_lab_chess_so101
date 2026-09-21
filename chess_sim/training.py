@@ -111,6 +111,11 @@ class MolmoAct2TrainConfig(Config):
     save_every: int = 500
     accelerate: str = ACCELERATE
     device: str = "cuda"
+    # A LeRobot checkpoint to continue from, on new data. Distinct from
+    # base_checkpoint: MolmoAct2 always builds itself from the upstream HF weights
+    # and loads trained weights on top, so a checkpoint of our own is reopened
+    # through --policy.path, never passed as the base.
+    init_from: str | None = None
 
     @property
     def checkpoints_dir(self) -> str:
@@ -124,10 +129,14 @@ class MolmoAct2TrainConfig(Config):
     def command(self, steps: int) -> list[str]:
         """Start a run that trains up to `steps` total."""
         image_keys = json.dumps([f"observation.images.{c}" for c in self.cameras])
+        # a fresh run names the policy type and its upstream weights; a warm start
+        # takes both from the checkpoint it continues
+        policy = ([f"--policy.path={self.init_from}"] if self.init_from else
+                  ["--policy.type=molmoact2", f"--policy.checkpoint_path={self.base_checkpoint}"])
         return self._launcher() + [
             f"--dataset.repo_id={self.repo_id}", f"--dataset.root={self.dataset_root}",
             "--dataset.video_backend=pyav", "--dataset.image_transforms.enable=true",
-            "--policy.type=molmoact2", f"--policy.device={self.device}", "--policy.action_mode=both",
+            *policy, f"--policy.device={self.device}", "--policy.action_mode=both",
             f"--policy.train_mode_vlm={self.train_mode_vlm}",
             f"--policy.chunk_size={self.chunk_size}", f"--policy.n_action_steps={self.n_action_steps}",
             f"--policy.setup_type={SETUP_TYPE}", f"--policy.control_mode={CONTROL_MODE}",
@@ -143,7 +152,6 @@ class MolmoAct2TrainConfig(Config):
             f"--num_workers={self.num_workers}",
             f"--save_freq={self.save_every}", "--env_eval_freq=-1",
             f"--output_dir={self.output_dir}",
-            f"--policy.checkpoint_path={self.base_checkpoint}",
         ]
 
     def resume_command(self, steps: int) -> list[str]:
