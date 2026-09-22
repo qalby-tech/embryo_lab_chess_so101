@@ -61,6 +61,9 @@ def main():
     ap.add_argument("--root", default="datasets/lerobot/chess_mc")
     ap.add_argument("--repo-id", default=DATASET_REPO)
     ap.add_argument("--out", default="outputs/molmoact2_mc")
+    ap.add_argument("--lr-scale", type=float, default=1.0,
+                    help="scale every learning rate and the floor; below 1 for continuing a "
+                         "converged policy without knocking it off its optimum")
     ap.add_argument("--init-from", default=None,
                     help="a trained checkpoint (its pretrained_model directory) to continue from on "
                          "new data, instead of beginning again from the pretrained arm policy")
@@ -85,6 +88,8 @@ def main():
                 "save_every": min(args.save_every, args.block)}
     if args.init_from:
         settings["init_from"] = args.init_from
+    if args.lr_scale != 1.0:
+        settings["lr_scale"] = args.lr_scale
     config = MolmoAct2TrainConfig(**settings)
     best_path = os.path.join(args.out, BEST)
     best = CheckpointScore.load(best_path)

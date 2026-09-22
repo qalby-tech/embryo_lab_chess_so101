@@ -29,6 +29,15 @@ SETUP_TYPE = "single so100/so101 robotic arm in molmoact2"
 CONTROL_MODE = "absolute joint pose"
 MM_PER_M = 1000.0
 CHECKPOINT_DIR = "checkpoints"
+# MolmoAct2's own learning rates (lerobot configuration_molmoact2.py), one per
+# parameter group. The scheduler decays each group to decay/language of its peak.
+MOLMOACT2_LEARNING_RATES = {
+    "optimizer_lr": 1e-5,                     # language model (LoRA)
+    "optimizer_vit_lr": 5e-6,                 # vision encoder
+    "optimizer_connector_lr": 5e-6,           # vision-to-language connector
+    "optimizer_action_expert_lr": 5e-5,       # action expert - the part that moves the arm
+    "scheduler_decay_lr": 1e-6,               # floor, relative to optimizer_lr
+}
 LAST = "last"
 PRETRAINED = "pretrained_model"
 TRAINING_STATE = "training_state"
@@ -116,6 +125,9 @@ class MolmoAct2TrainConfig(Config):
     # and loads trained weights on top, so a checkpoint of our own is reopened
     # through --policy.path, never passed as the base.
     init_from: str | None = None
+    # Scales every learning rate and the floor together. A warm start at the full
+    # peak re-heats a converged policy to ten times the rate it finished at.
+    lr_scale: float = 1.0
 
     @property
     def checkpoints_dir(self) -> str:
@@ -152,7 +164,14 @@ class MolmoAct2TrainConfig(Config):
             f"--num_workers={self.num_workers}",
             f"--save_freq={self.save_every}", "--env_eval_freq=-1",
             f"--output_dir={self.output_dir}",
+            *self._learning_rates(),
         ]
+
+    def _learning_rates(self) -> list[str]:
+        if self.lr_scale == 1.0:
+            return []
+        return [f"--policy.{name}={rate * self.lr_scale:g}"
+                for name, rate in MOLMOACT2_LEARNING_RATES.items()]
 
     def resume_command(self, steps: int) -> list[str]:
         """Continue the run to `steps` total; everything else comes from the saved config."""

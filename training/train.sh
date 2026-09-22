@@ -23,4 +23,5 @@ exec $PY -u examples/train_policy.py \
   --eval-max-steps "$EVAL_MAX_STEPS" \
   $([ "${INTERPOLATE:-1}" = "1" ] || echo --no-interpolate) \
   $([ -n "${INIT_FROM:-}" ] && echo --init-from "$INIT_FROM") \
+  $([ -n "${LR_SCALE:-}" ] && echo --lr-scale "$LR_SCALE") \
   "$@"
