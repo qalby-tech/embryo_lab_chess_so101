@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from .assets import piece_asset_name
 from .config import (JOINTS, START_FEN, AppearanceConfig, Camera, EnvConfig, FailureReason,
-                     JointPose, Square, square_at, square_index)
+                     JointName, JointPose, Square, square_at, square_index)
 from .controller import PickPlaceController, grasp_plan
 from .ik import So101Ik
 from .reach import MAX_IK_ERROR, MAX_TILT, ReachMap
@@ -158,6 +158,10 @@ class ChessSimEnv:
                            for n in JOINTS]
 
         self.cameras = tuple(config.control.cameras)
+        self._noise_rng = np.random.default_rng()
+        self._noise_from = np.zeros(len(JOINTS))   # the perturbation ramps between draws:
+        self._noise_to = np.zeros(len(JOINTS))     # a wander, not a jolt that shakes a piece loose
+        self.noise_suppressed = False    # the expert sets this for its precise servo phases
         self._renderer: mujoco.Renderer | None = None
         self.controller = PickPlaceController(self)
         self._step_count = 0
@@ -177,6 +181,9 @@ class ChessSimEnv:
         origin = nominal if rng is None else (nominal[0] + rng.uniform(-shift, shift),
                                               nominal[1] + rng.uniform(-shift, shift))
         self._move_board(origin)
+        if rng is not None and self.config.action_noise.enabled:
+            # only with noise on, so runs without it draw exactly what they always did
+            self._noise_rng = np.random.default_rng(rng.getrandbits(32))
         if isinstance(position, chess.Board):
             position = position.board_fen()
         self.position = chess.Board(position if " " in position else f"{position} w - - 0 1")
@@ -258,12 +265,27 @@ class ChessSimEnv:
         """Command joint targets (six joints, radians) for one control period."""
         action = np.asarray(action, dtype=float)
         if on_step is not None:
-            on_step(action)
-        for aid, target in zip(self._actuators, action):
+            on_step(action)                    # the command is what gets recorded
+        executed = action + self._action_noise() if self.config.action_noise.enabled else action
+        for aid, target in zip(self._actuators, executed):
             self.data.ctrl[aid] = target
         for _ in range(self.substeps):
             mujoco.mj_step(self.model, self.data)
         self._step_count += 1
+
+    def _action_noise(self) -> np.ndarray:
+        """The current perturbation: a new draw every `hold` control steps, reached
+        by a linear ramp from the last one."""
+        noise = self.config.action_noise
+        if self.noise_suppressed:
+            return np.zeros(len(JOINTS))
+        phase = self._step_count % noise.hold
+        if phase == 0:
+            self._noise_from = self._noise_to
+            self._noise_to = self._noise_rng.normal(0.0, noise.joint_std, len(JOINTS))
+            if not noise.perturb_gripper:
+                self._noise_to[JOINTS.index(JointName.GRIPPER)] = 0.0
+        return self._noise_from + (self._noise_to - self._noise_from) * (phase / noise.hold)
 
     def step(self, action: np.ndarray, on_step: OnStep | None = None,
              images: bool = True) -> Observation:

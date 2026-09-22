@@ -8,7 +8,8 @@
 
 Trained policy and demonstrations: see `chess_sim.hub`.
 """
-from .config import (DOF, JOINTS, ROBOT_CAMERAS, SQUARES, START_FEN, AppearanceConfig, BoardConfig,
+from .config import (DOF, JOINTS, ROBOT_CAMERAS, SQUARES, START_FEN, ActionNoiseConfig, AppearanceConfig,
+                     BoardConfig,
                      Camera, ClearanceConfig, Config, ControlConfig, EnvConfig, FailureReason,
                      JointName, JointPose, RandomizationConfig, RecoveryTrigger, Square,
                      ToleranceConfig, square_at, square_index)
@@ -28,7 +29,7 @@ __all__ = [
     # simulator
     "ChessSimEnv", "Observation", "CameraImages", "TaskResult", "Layout", "PieceSnapshot",
     # configuration
-    "Config", "EnvConfig", "BoardConfig", "AppearanceConfig", "ControlConfig",
+    "Config", "EnvConfig", "BoardConfig", "AppearanceConfig", "ControlConfig", "ActionNoiseConfig",
     "RandomizationConfig", "ToleranceConfig", "ClearanceConfig", "PositionConfig",
     "Camera", "JointName", "JointPose", "JOINTS", "DOF", "ROBOT_CAMERAS",
     "Square", "SQUARES", "square_at", "square_index", "FailureReason", "START_FEN",

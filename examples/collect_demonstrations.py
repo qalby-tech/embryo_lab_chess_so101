@@ -22,22 +22,22 @@ import time
 
 import numpy as np
 
-from chess_sim import (AppearanceConfig, CaptureSampler, ChessSimEnv, ControlConfig, EnvConfig,
-                       EpisodeRecorder, MoveSampler, RecorderConfig, TaskFamily, demonstrate)
+from chess_sim import (ActionNoiseConfig, AppearanceConfig, CaptureSampler, ChessSimEnv, ControlConfig,
+                       EnvConfig, EpisodeRecorder, MoveSampler, RecorderConfig, TaskFamily, demonstrate)
 
 SHARD_PREFIX = "shard_"
 SEED_STRIDE = 1000      # keeps shards' random streams apart
 
 
 def collect(out: str, episodes: int, seed: int, randomize: bool, image_size: tuple[int, int],
-            moves: tuple[str, ...], family: TaskFamily) -> tuple[int, int]:
+            moves: tuple[str, ...], family: TaskFamily, noise: ActionNoiseConfig) -> tuple[int, int]:
     """Record `episodes` demonstrations into `out`; returns (successes, episodes)."""
     rng, looks = random.Random(seed), np.random.default_rng(seed)
     # One scene per process: piece size and the board texture are baked into the
     # compiled model, and every rebuild leaks about a gigabyte of driver memory.
     # Size and board vary across chunks instead, colors and lighting per episode.
     config = EnvConfig(appearance=AppearanceConfig.sample(looks) if randomize else AppearanceConfig(),
-                       control=ControlConfig(image_size=image_size))
+                       control=ControlConfig(image_size=image_size), action_noise=noise)
     env = ChessSimEnv(config)
     recorder = EpisodeRecorder(env, RecorderConfig(root=out))
     sampler = (CaptureSampler(randomize_layout=randomize) if family is TaskFamily.CAPTURE
@@ -70,8 +70,14 @@ def main():
                     help="ordinary moves, or pieces taken off the board")
     ap.add_argument("--moves", default=None,
                     help="comma-separated UCI moves to record instead of random ones, e.g. e2e4,d7d5")
+    ap.add_argument("--noise", type=float, default=0.0,
+                    help="rad: perturb execution by this much per joint while recording the expert's "
+                         "clean commands, so the data shows recovery from drift")
+    ap.add_argument("--noise-hold", type=int, default=ActionNoiseConfig().hold,
+                    help="control steps each perturbation lasts")
     ap.add_argument("--out", default="datasets/chess")
     args = ap.parse_args()
+    noise = ActionNoiseConfig(joint_std=args.noise, hold=args.noise_hold)
 
     moves = tuple(m.strip() for m in args.moves.split(",")) if args.moves else ()
     existing = len([d for d in os.listdir(args.out)
@@ -81,7 +87,7 @@ def main():
         count = min(args.chunk, remaining)
         jobs.append((os.path.join(args.out, f"{SHARD_PREFIX}{index:04d}"), count,
                      args.seed + SEED_STRIDE * index, args.randomize, tuple(args.image_size),
-                     moves, args.task))
+                     moves, args.task, noise))
         remaining -= count
         index += 1
 

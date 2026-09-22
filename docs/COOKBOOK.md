@@ -290,7 +290,33 @@ For a reward of your own, the pieces are public: `env.piece_snapshot()` for
 where things were, `env.evaluate(task, before)` for the verdict, and
 `reach_reward` / `progress_reward` / `terminal_reward` for the arithmetic.
 
-## 9. DAgger: recording the way out of the policy's own mistakes
+## 9. Recovery data
+
+A clean demonstration never shows how to get back on course, and a policy that
+executes three seconds of motion between looks needs exactly that. Two ways to
+record it.
+
+**Execution noise.** The expert's commands are executed with a slow random
+wander added - a fresh draw per joint every `hold` control steps, reached by a
+ramp - while the recorded label stays the clean command, so every frame pairs a
+drifted state with the correction from it. The wander is kept off the grasp and
+place servos, which have a fixed budget of rounds and cannot cancel a moving
+perturbation. Measured on the expert: 0.02 rad over 30 steps leaves it at 6 of
+8 with 6.7 mm placement; 0.04 drops the piece.
+
+```python
+from chess_sim import ActionNoiseConfig, EnvConfig
+
+env = ChessSimEnv(EnvConfig(action_noise=ActionNoiseConfig(joint_std=0.02, hold=30)))
+demonstrate(env, CaptureSampler(), 500, rng, recorder=recorder)     # labels are clean
+```
+
+```bash
+python examples/collect_demonstrations.py --task capture --noise 0.02 --noise-hold 30 \
+    --episodes 1400 --workers 4 --randomize --out datasets/chess_recovery_noise/captures
+```
+
+**DAgger: the policy's own mistakes.**
 
 Ordinary demonstrations only ever show the arm doing things right, so a policy
 never learns its way out of the messes it makes. `recover` lets the policy drive

@@ -169,6 +169,10 @@ class PickPlaceController:
     def _go(self, target, gap, offset, steps, on_step, precise=False) -> bool:
         """Interpolate to the IK solution, then hold until the servos converge."""
         env = self.env
+        # Execution noise (ActionNoiseConfig) stays on the transit legs, where a
+        # policy drifts; a grasp or place servo has a fixed budget of rounds and
+        # cannot cancel a perturbation that keeps moving under it.
+        env.noise_suppressed = precise
         res = env.ik.solve(env.data, target, offset=offset, span=self._span)
         q_start = env.arm_joint_positions()[:5]
         grip = gripper.gap_to_angle(gap)
@@ -189,4 +193,5 @@ class PickPlaceController:
             for _ in range(SERVO_ROUND_STEPS):
                 env.apply_action(np.append(res.q + bias, grip), on_step)
         pos, _ = env.ik.tool_pose(env.data, offset)
+        env.noise_suppressed = False
         return bool(np.linalg.norm(pos - target) < 2.5 * PRECISION) if precise else True

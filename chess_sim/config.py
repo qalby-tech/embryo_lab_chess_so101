@@ -263,6 +263,24 @@ class RandomizationConfig(Config):
     arm_joint_jitter: float = 0.10    # rad on each joint
 
 
+class ActionNoiseConfig(Config):
+    """Perturb what the arm executes while recording what the expert commanded.
+
+    A clean demonstration never shows how to get back on course. Executing the
+    expert's commands with a slow random offset puts the arm where a drifting
+    policy ends up, and the expert's corrections from there are what gets
+    recorded - the label is always the command, never the perturbed one.
+    """
+
+    joint_std: float = 0.0        # rad per joint; 0 turns it off
+    hold: int = 10                # control steps each draw lasts: a drift, not a tremor
+    perturb_gripper: bool = False # a perturbed jaw drops the piece, which nothing recovers
+
+    @property
+    def enabled(self) -> bool:
+        return self.joint_std > 0
+
+
 class ToleranceConfig(Config):
     """The success rule, shared by the scripted expert and by policy evaluation."""
 
@@ -290,6 +308,7 @@ class EnvConfig(Config):
     randomization: RandomizationConfig = RandomizationConfig()
     tolerances: ToleranceConfig = ToleranceConfig()
     clearance: ClearanceConfig = ClearanceConfig()
+    action_noise: ActionNoiseConfig = ActionNoiseConfig()
 
 
 def square_index(square: int | str | Square) -> int:

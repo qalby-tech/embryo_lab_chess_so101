@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 import imageio.v2 as imageio
 import numpy as np
 
-from .config import JOINTS, ROBOT_CAMERAS, AppearanceConfig, Camera, Config, RecoveryTrigger
+from .config import (JOINTS, ROBOT_CAMERAS, ActionNoiseConfig, AppearanceConfig, Camera, Config,
+                     RecoveryTrigger)
 from .env import ChessSimEnv, Layout, Record, TaskResult
 from .tasks import Task, TaskFamily
 
@@ -46,6 +47,7 @@ class EpisodeMeta(Record):
     joints: list[str]
     cameras: list[str]
     recovery: RecoveryTrigger | None = None   # set when an expert took over from a policy
+    action_noise: ActionNoiseConfig | None = None   # set when execution was perturbed
     success: bool = False
     steps: int = 0
     placement_error: float = 0.0
@@ -83,7 +85,9 @@ class EpisodeRecorder:
             episode=self._index, instruction=task.instruction, task=task.family, move=task.label,
             fen=self.env.position.fen(), layout=self.env.layout,
             appearance=self.env.config.appearance if record_appearance else None,
-            recovery=recovery, fps=self.env.control_hz, joints=[str(j) for j in JOINTS],
+            recovery=recovery,
+            action_noise=self.env.config.action_noise if self.env.config.action_noise.enabled else None,
+            fps=self.env.control_hz, joints=[str(j) for j in JOINTS],
             cameras=[str(c) for c in self.config.cameras])
 
     def on_step(self, action: np.ndarray) -> None:
