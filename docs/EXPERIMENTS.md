@@ -212,6 +212,42 @@ disturbed a neighbour; of the 7 capture failures, 3 dropped the piece. Reels:
 
 ---
 
+### 4.7 Rebalancing captures: more of the same data changes nothing
+
+Captures were a fifth of the training set and the weaker family (68% against moves'
+80% at the shipped horizon, §5.7). 1,982 more capture demonstrations were recorded -
+3,200 against 5,000 moves - merged with the published export (8,083 episodes, 672,006
+frames) and the published policy was continued on it from step 70,000 for 15,000 steps.
+Twice, because the first attempt confounded two things.
+
+| continuation | 48-episode checks (moves, captures) | paired vs published, 300 positions, horizon 30 |
+| --- | --- | --- |
+| full peak rate (1e-5, as a fresh run) | 21/32 11/16 -> 19/32 12/16 -> 27/32 14/16 | **219/300** (73%): captures -3, moves -5, p = 0.48 |
+| all rates at a tenth | 24/32 10/16 -> 25/32 11/16 | **231/300** (77%): captures +0, moves +4, p = 0.75 |
+| published 070000 | 25/32 10/16 | 227/300 (76%) |
+
+Three things the pair of runs settles:
+
+- **The data gave nothing.** At five actions per call the rebalanced weights score
+  exactly what the published ones do - captures 85/100 against 85, moves 155/200
+  against 156. Two and a half times the capture demonstrations, and the policy is the
+  same policy.
+- **The full-rate restart did damage of its own.** It re-heated a converged policy to
+  ten times the rate it had finished at; four pieces were dropped where the published
+  model dropped none, and tray misses went from 4 to 9. At a tenth of the rate the
+  failure profile is the published model's again (paired against the full-rate run:
+  +12, p = 0.24). A continuation must not restart the schedule.
+- **The 48-episode in-training checks mislead.** The full-rate run's final check read
+  41/48 - the best number ever seen in training - and the same checkpoint was 8
+  episodes worse than the published model on 300 paired positions. That check was not
+  even on the same capture positions. Read the paired test; the training-time score
+  picks the checkpoint and nothing else.
+
+Why more captures could not help: §5.7 located the capture failure in the length of
+the open-loop chunk - three blind seconds of a trajectory that drifts - and a clean
+demonstration contains no example of recovering from drift, however many of them
+there are. Recovery has to be in the data. §4.8 records the attempt.
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
