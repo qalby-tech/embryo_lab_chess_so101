@@ -19,9 +19,9 @@ import random
 import time
 from collections import defaultdict
 
-from chess_sim import (CaptureSampler, ChessSimEnv, Config, ControlConfig, EnvConfig, LeRobotPolicy,
-                       LeRobotPolicyConfig, MoveSampler, RolloutConfig, TaskFamily, run_episode,
-                       wilson_interval)
+from chess_sim import (ActionNoiseConfig, CaptureSampler, ChessSimEnv, Config, ControlConfig, EnvConfig,
+                       LeRobotPolicy, LeRobotPolicyConfig, MoveSampler, RolloutConfig, TaskFamily,
+                       run_episode, wilson_interval)
 
 MOVES_PER_CAPTURE = 2      # the published protocol scores 64 moves against 32 captures
 
@@ -68,6 +68,10 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", default="outputs/sweeps/inference.jsonl")
     ap.add_argument("--resume", action="store_true", help="skip positions already in --out")
+    ap.add_argument("--noise", type=float, default=0.0,
+                    help="execution noise on the policy's actions, radians (ActionNoiseConfig.joint_std); "
+                         "the same draw per position for every checkpoint scored with one --seed")
+    ap.add_argument("--noise-hold", type=int, default=ActionNoiseConfig().hold)
     ap.add_argument("--arms", nargs="*", default=None,
                     help="only these arms by label, for extending one comparison cheaply")
     args = ap.parse_args()
@@ -89,7 +93,10 @@ def main():
     policy = LeRobotPolicy.load(base)
     print(f"loaded {policy.policy_type} in {time.perf_counter() - loaded:.0f} s; "
           f"chunk {policy.chunk_size}, targets held {base.hold} control steps", flush=True)
-    env = ChessSimEnv(EnvConfig(control=control.model_copy(update={"cameras": policy.cameras})))
+    env = ChessSimEnv(EnvConfig(control=control.model_copy(update={"cameras": policy.cameras}),
+                                action_noise=ActionNoiseConfig(joint_std=args.noise, hold=args.noise_hold)))
+    if args.noise:
+        print(f"execution noise {args.noise} rad, redrawn every {args.noise_hold} control steps", flush=True)
     rollout = RolloutConfig(max_steps=args.max_steps)
 
     outcomes: dict[str, dict[int, bool]] = defaultdict(dict)
