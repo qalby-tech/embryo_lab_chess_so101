@@ -31,19 +31,29 @@ def main():
     ap.add_argument("sources", nargs="+", type=Path, help="exported dataset roots, in order")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--repo-id", default="XvKuoMing/so101_chess")
+    ap.add_argument("--repeat", nargs="*", default=[], metavar="ROOT=N",
+                    help="include a source N times, so a small set of corrections weighs "
+                         "more than its share of frames without touching the sampler")
     args = ap.parse_args()
     if args.out.exists():
         raise SystemExit(f"{args.out} exists; remove it first or choose another --out")
 
-    expected_episodes = sum(info(root)["total_episodes"] for root in args.sources)
-    expected_frames = sum(info(root)["total_frames"] for root in args.sources)
+    repeats = {Path(spec.split("=")[0]): int(spec.split("=")[1]) for spec in args.repeat}
+    unknown = set(repeats) - set(args.sources)
+    if unknown:
+        raise SystemExit(f"--repeat names sources that are not listed: {sorted(map(str, unknown))}")
+    roots = [root for root in args.sources for _ in range(repeats.get(root, 1))]
+
+    expected_episodes = sum(info(root)["total_episodes"] for root in roots)
+    expected_frames = sum(info(root)["total_frames"] for root in roots)
     for root in args.sources:
         meta = info(root)
-        print(f"  {root}: {meta['total_episodes']} episodes, {meta['total_frames']} frames")
+        times = f" x{repeats[root]}" if repeats.get(root, 1) > 1 else ""
+        print(f"  {root}{times}: {meta['total_episodes']} episodes, {meta['total_frames']} frames")
 
     aggregate_datasets(repo_ids=[info(root).get("repo_id", args.repo_id) or args.repo_id
-                                 for root in args.sources],
-                       aggr_repo_id=args.repo_id, roots=args.sources, aggr_root=args.out)
+                                 for root in roots],
+                       aggr_repo_id=args.repo_id, roots=roots, aggr_root=args.out)
 
     merged = info(args.out)
     if (merged["total_episodes"], merged["total_frames"]) != (expected_episodes, expected_frames):

@@ -239,6 +239,9 @@ def recover(env: ChessSimEnv, policy: Policy, task: Task, recorder=None,
         steps = step + 1
         if steps < dagger.min_prefix or steps % dagger.check_every:
             continue
+        finished = env.evaluate(task, before, steps=steps)
+        if finished.success:
+            break                   # nothing to correct; no need to run out the budget
         trigger = _trigger(env, task, before, steps, config, dagger)
         if trigger is not None:
             break
