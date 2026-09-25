@@ -181,7 +181,8 @@ class DaggerConfig(Config):
 
     min_prefix: int = 30          # control steps before anything counts as going wrong
     check_every: int = 15         # how often to look, in control steps
-    stall_fraction: float = 0.6   # of the budget: by here the named piece must have moved
+    stall_fraction: float = 0.4   # of the budget: by here the named piece must be off the board
+    lift: float = 0.035           # metres above the board surface that counts as lifted
 
 
 class DaggerResult(Record):
@@ -204,9 +205,17 @@ def _trigger(env: ChessSimEnv, task: Task, before: PieceSnapshot, steps: int,
         return RecoveryTrigger.DISTURBED
     if verdict.picked is not None and verdict.picked != task.source:
         return RecoveryTrigger.WRONG_PIECE
-    if steps >= dagger.stall_fraction * rollout.max_steps and verdict.picked is None:
+    if steps >= dagger.stall_fraction * rollout.max_steps and not _lifted(env, task, dagger):
         return RecoveryTrigger.STALLED
     return None
+
+
+def _lifted(env: ChessSimEnv, task: Task, dagger: DaggerConfig) -> bool:
+    """Is the named piece in the air? `evaluate` only knows that it moved, and a piece
+    nudged a centimetre across its square has moved without ever being held - the
+    commonest way a grasp fails, and one that must still hand over to the expert."""
+    slot = env.slot_at(task.source)
+    return slot is not None and env.piece_position(slot)[2] - env.board.top > dagger.lift
 
 
 def recover(env: ChessSimEnv, policy: Policy, task: Task, recorder=None,

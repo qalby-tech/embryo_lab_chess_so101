@@ -328,16 +328,18 @@ from chess_sim import DaggerConfig, EpisodeRecorder, RecorderConfig, recover
 
 recorder = EpisodeRecorder(env, RecorderConfig(root="datasets/chess_recoveries"))
 outcome = recover(env, policy, task, recorder, RolloutConfig(max_steps=450),
-                  DaggerConfig(min_prefix=30, check_every=15, stall_fraction=0.6))
+                  DaggerConfig(min_prefix=30, check_every=15, stall_fraction=0.4))
 outcome.trigger        # RecoveryTrigger.STALLED, or None if the policy was doing fine
 outcome.prefix_steps   # how long it drove before the hand-over
 outcome.result         # the expert's attempt, scored like any other
 ```
 
 A correction is triggered when the policy engages the wrong piece, disturbs a
-neighbour, or has still not moved the named piece after `stall_fraction` of the
-budget - all read off `env.evaluate`, the same rule everything else is scored
-by. Handing over at a fixed step instead would mostly re-record ordinary
+neighbour, or still has not lifted the named piece after `stall_fraction` of the
+budget (a capture that is going to work has it in the air by a quarter of the
+budget). The first two are read off `env.evaluate`, the rule everything else is
+scored by; the last is the piece's height, because "moved" is not "held" - a
+piece nudged across its square has moved. Handing over at a fixed step instead would mostly re-record ordinary
 demonstrations from a random pose, which is not worth the GPU time.
 
 The episode's `meta.json` carries `recovery`, so a dataset can be filtered by

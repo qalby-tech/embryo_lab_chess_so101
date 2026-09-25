@@ -248,6 +248,114 @@ the open-loop chunk - three blind seconds of a trajectory that drifts - and a cl
 demonstration contains no example of recovering from drift, however many of them
 there are. Recovery has to be in the data. §4.8 records the attempt.
 
+### 4.8 Recovery in the data: demonstrations under execution noise
+
+§4.7 ended with a hypothesis: the policy fails captures because a clean demonstration
+never shows the way back from a drifted trajectory. The test is to put recovery into the
+data. `ActionNoiseConfig` (0.02 rad, a fresh draw every 30 control steps, reached by a
+ramp, gripper untouched, off during the expert's precise servo at the piece and at the
+target) perturbs what the arm executes while the recording keeps the expert's command as
+the label - so every frame is "the arm is off course, here is where it should go".
+
+Collected: 1,400 captures and 600 moves, four workers, five hours. The expert succeeded in
+1,197 of them and the other 803 were dropped by the exporter, as any failed demonstration
+is. Merged with the rebalanced set: `chess_mc_v3`, 9,280 episodes, 823,714 frames.
+Continued from the published checkpoint for 15,000 steps at the tenth-rate schedule that
+§4.7 found harmless (verified in the run's config: optimizer rate 1e-6, decay to 1e-7).
+
+| | 48-episode checks (moves, captures) | paired vs published, 300 positions, horizon 30 |
+| --- | --- | --- |
+| 6,000 / 11,000 / 15,000 | 22/32 11/16 -> 24/32 11/16 -> 20/32 11/16 | **217/300** (72%): captures +0 (19 to 19), moves -10 (33 to 23, p = 0.23) |
+| published 070000 | 25/32 10/16 | 227/300 (76%) |
+
+Captures: exactly the same. Not one more disagreement in either direction on the hundred
+capture positions; "still on the board" 24 -> 18 but "missed the tray" 4 -> 6 and
+"disturbed other pieces" 4 -> 7. Moves drifted down within noise, with two dropped pieces
+where the published model drops none. The loss tells the same story from the other side:
+it opened at 0.67 on the new set against 0.39 when the clean set was resumed, and closed
+the run at 0.55 - the perturbed frames are harder, and fifteen thousand gentle steps did
+not fit them.
+
+Two things about the data itself were only clear afterwards:
+
+- **The recoveries that matter were not recorded.** Noise was suppressed wherever the
+  expert servos precisely - the descent onto the piece and onto the target square or tray
+  slot - because with it on, the expert drops pieces. But those are the phases where the
+  policy's captures fail: the piece is never lifted, or it is lifted and missed into the
+  tray. The dataset shows how to come back on course in transit, which the policy already
+  does, and nothing at the grasp and the release.
+- **Selection removed the hard cases.** Sixty percent expert success under noise means
+  the exported episodes are the ones where the perturbation happened to be mild at the
+  wrong moments. The recordings the policy would learn most from are the 803 that failed.
+
+**Did the policy learn anything from the perturbed frames?** The paired test cannot say,
+because clean rollouts never put the policy in a perturbed state. So both checkpoints
+were scored again on the same 300 positions with the same execution noise applied to the
+policy's own actions (`tools/sweep_inference.py --noise 0.02 --noise-hold 30`; the draws
+are seeded per position, so both models meet the same offsets). One caveat first: the
+policy gets no quiet phase. The expert had the noise switched off at the piece and at the
+target; the policy has it on at the moment of release too, and a release made 12-34 mm
+off the square center - half of the placement failures below - is unrecoverable at
+thirty actions per call by any model. That artefact dominates both scores.
+
+| under 0.02 rad execution noise | published 070000 | recovery run 015000 |
+| --- | --- | --- |
+| overall | 136/300 (45%) | 147/300 (49%), paired 49 to 60, p = 0.34 |
+| moves | 78/200: placement error 116 | 83/200: placement error 115 |
+| captures | 58/100: still on the board 23, **missed the tray 16**, disturbed 1 | 64/100: still on the board 30, **missed the tray 5**, disturbed 1 |
+| captures delivered, given the piece was lifted | 58 of 77 (75%) | 64 of 70 (91%) |
+
+Read by phase rather than by total, the split is the one the data predicts. Where
+recovery was demonstrated - in transit and at the tray - the recovery run is better: tray
+misses 16 -> 5, pieces knocked in passing 7 -> 2. Where recovery was never demonstrated - the grasp and the release - it is the same or
+worse: pieces never lifted 23 -> 30, placement failures 116 -> 115. Counts of five to
+thirty, none significant alone, but the two transit failure types move together and the
+two grasp-phase types do not move at all. The gentle continuation absorbed what it was
+shown; what it was shown was not where captures fail.
+
+A second finding falls out of the same table and stands on its own: **0.02 rad of
+execution error - about a degree per joint, what a loaded hobby servo does - takes the
+shipped horizon from 76% to 45%**, and moves from 159 to 78. The policy places blind at
+the end of a chunk; nothing in it looks at where the piece actually is before letting go.
+That is a hardware problem before it is a data problem, and it is the case for executing
+fewer actions per call (§5.7) or re-planning mid-chunk on the real arm.
+
+Nothing from this run is published. Three continuations of the same checkpoint - more
+captures at full rate, more captures at a tenth, recovery data at a tenth - and the paired
+test has not moved once (219, 231, 217 against 227). The noise test says the recipe is not
+the problem: the policy learned the phases it was shown. What comes next has to put the
+expert's corrections at the grasp and the release, from the states the policy actually
+reaches - which is what `recover()` records, provided its trigger fires there (§4.9).
+
+### 4.9 Does the hand-over fire where captures fail?
+
+Before spending a day of rollouts on corrections, the published model's 24 failed
+captures from the 300-position test (all "still on the board") were replayed at thirty
+actions per call under `recover()`, logging what the trigger saw every fifteen steps.
+
+| on replay | positions | what the trigger did | expert from there |
+| --- | --- | --- | --- |
+| the policy succeeded this time | 11 | nothing to do | - |
+| never engaged: piece lifted 0-3 mm, moved under 15 mm | 7 | stalled, at step 270 | 7/7 |
+| knocked a neighbour first | 5 | disturbed, at steps 60-360 | 1/5 |
+| nudged the piece 12-18 mm, never lifted it | 2 | **nothing, all 450 steps** | - |
+
+Three things came out of it. The failed captures are half luck: eleven of the twenty-four
+positions went through on the second attempt, which is the flow-matching draw, not the
+position. The stall trigger fired on every case it was meant for, and the expert finished
+all of them - a correction from the pose the policy hovers in is exactly the data §4.8
+was missing. And it had a hole: `evaluate` reports a piece as "picked" once it has moved
+more than the disturbance tolerance, so a piece shoved a centimetre across its square
+counted as engaged and the policy was left to hover over it for the whole budget. The
+stall rule now reads the piece's height instead (`DaggerConfig.lift`, 35 mm above the
+board), and fires at 0.4 of the budget rather than 0.6: every successful capture in the
+replay had the piece in the air by step 105, so 180 leaves the margin and saves three
+seconds of hovering per correction.
+
+The corrections after a disturbance mostly fail under the expert too (a knocked piece
+lies in the path), and the exporter drops failed episodes, so those hand-overs cost
+rollouts and yield little. The next collection is captures only, where the yield is.
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
