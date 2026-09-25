@@ -335,11 +335,13 @@ outcome.result         # the expert's attempt, scored like any other
 ```
 
 A correction is triggered when the policy engages the wrong piece, disturbs a
-neighbour, or still has not lifted the named piece after `stall_fraction` of the
-budget (a capture that is going to work has it in the air by a quarter of the
-budget). The first two are read off `env.evaluate`, the rule everything else is
-scored by; the last is the piece's height, because "moved" is not "held" - a
-piece nudged across its square has moved. Handing over at a fixed step instead would mostly re-record ordinary
+neighbour, shoves the named piece across its square without lifting it, or still
+has not lifted it after `stall_fraction` of the budget (a capture that is going
+to work has it in the air by a quarter of the budget). The first two are read off
+`env.evaluate`, the rule everything else is scored by; the others use the piece's
+height, because "moved" is not "held". A piece the policy has knocked over ends
+the episode without a hand-over: the expert has no grasp for a piece on its side,
+so there is nothing to record. Handing over at a fixed step instead would mostly re-record ordinary
 demonstrations from a random pose, which is not worth the GPU time.
 
 The episode's `meta.json` carries `recovery`, so a dataset can be filtered by

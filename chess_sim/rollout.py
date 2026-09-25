@@ -205,7 +205,15 @@ def _trigger(env: ChessSimEnv, task: Task, before: PieceSnapshot, steps: int,
         return RecoveryTrigger.DISTURBED
     if verdict.picked is not None and verdict.picked != task.source:
         return RecoveryTrigger.WRONG_PIECE
-    if steps >= dagger.stall_fraction * rollout.max_steps and not _lifted(env, task, dagger):
+    lifted = _lifted(env, task, dagger)
+    slot = env.slot_at(task.source)
+    if slot is not None and env.piece_upright(slot) < env.config.tolerances.upright_min:
+        return RecoveryTrigger.TOPPLED
+    if verdict.picked == task.source and not lifted:
+        # shoved across its square: the policy is fumbling the grasp, and the next
+        # shove tends to knock the piece over, after which no correction is possible
+        return RecoveryTrigger.NUDGED
+    if steps >= dagger.stall_fraction * rollout.max_steps and not lifted:
         return RecoveryTrigger.STALLED
     return None
 
@@ -250,6 +258,9 @@ def recover(env: ChessSimEnv, policy: Policy, task: Task, recorder=None,
         return DaggerResult(task=task, trigger=None, prefix_steps=steps,
                             policy_success=finished.success)
 
+    if trigger is RecoveryTrigger.TOPPLED:
+        # a piece on its side is beyond the expert; do not spend its budget or a recording
+        return DaggerResult(task=task, trigger=trigger, prefix_steps=steps, policy_success=False)
     if recorder is not None:
         recorder.begin(task, recovery=trigger)
     result = env.execute(task, on_step=None if recorder is None else recorder.on_step)

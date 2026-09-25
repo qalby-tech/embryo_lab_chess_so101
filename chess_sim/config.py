@@ -62,6 +62,8 @@ class RecoveryTrigger(StrEnum):
 
     WRONG_PIECE = "engaged the wrong piece"
     DISTURBED = "disturbed a neighbour"
+    NUDGED = "pushed the named piece without lifting it"
+    TOPPLED = "knocked the named piece over"    # nothing to correct: the expert has no grasp for it
     STALLED = "named piece had not moved"
 
 

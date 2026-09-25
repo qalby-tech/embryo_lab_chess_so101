@@ -354,7 +354,24 @@ seconds of hovering per correction.
 
 The corrections after a disturbance mostly fail under the expert too (a knocked piece
 lies in the path), and the exporter drops failed episodes, so those hand-overs cost
-rollouts and yield little. The next collection is captures only, where the yield is.
+rollouts and yield little. The collection is captures only, where the yield is.
+
+**Seven hours in, the expert was failing 40% of the hand-overs** it took - 143 of 356
+stalled grasps - against 1% of clean captures. Replaying twenty of the failed hand-overs
+from the recorded arm pose alone, without the policy, the expert finished nineteen: the
+pose was not the problem. Logging the piece instead, at the moment of hand-over, was:
+
+| at hand-over | expert fixed it (19) | expert failed (6) |
+| --- | --- | --- |
+| named piece upright (z-axis alignment, median) | 1.00 | -0.08 |
+| named piece displaced, median | 2 mm | 27 mm |
+
+The policy had knocked the piece over before the stall fired, and the expert has no
+grasp for a piece on its side. Two triggers were added: a shove across the square
+without a lift hands over at once, while the piece is still standing (the replay
+shows the expert handling a piece moved 16 mm); a piece already on its side ends the
+episode with no expert and no recording, since there is nothing to correct. The
+collection continued under the new rules from seed 703.
 
 ## 5. Findings
 

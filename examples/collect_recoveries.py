@@ -68,7 +68,7 @@ def main():
             triggers["policy finished it"] += 1
         else:
             triggers[str(outcome.trigger)] += 1
-            recovered += outcome.result.success
+            recovered += bool(outcome.result and outcome.result.success)
         print(f"[{index + 1}/{args.episodes}] {recovered} usable | {task.label}: "
               f"{outcome.trigger or 'no correction needed'} after {outcome.prefix_steps} steps"
               + (f" -> expert {'fixed it' if outcome.result.success else 'failed too'}"
