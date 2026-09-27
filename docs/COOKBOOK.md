@@ -110,24 +110,36 @@ observed state, and a policy scores well by echoing its input.
 
 ## 4. Training
 
-`MolmoAct2TrainConfig` holds the fine-tuning flags - each one with the reason it
-is there - and builds the command:
+`TrainConfig` holds what every run shares - the dataset, the step budget, the
+checkpoint cadence, a warm start - and a `PolicyRecipe` holds what one
+architecture needs: its pretrained weights, its chunk, its learning rates, the
+flags it cannot run without. `RECIPES` maps the LeRobot policy type to its
+recipe; MolmoAct2 and SmolVLA are in, and a new architecture is a subclass
+with a handful of fields, nothing else changes:
 
 ```python
 import subprocess
-from chess_sim.training import MolmoAct2TrainConfig
+from chess_sim.training import RECIPES, TrainConfig
 
-train = MolmoAct2TrainConfig(dataset_root="datasets/lerobot/chess_mc",
-                             output_dir="outputs/molmoact2_mc",
-                             total_steps=70_000, batch_size=8)
+train = TrainConfig(recipe=RECIPES["smolvla"],
+                    dataset_root="datasets/lerobot/chess_mc_dagger",
+                    output_dir="outputs/smolvla_mc",
+                    total_steps=20_000, batch_size=32)
 
-subprocess.run(train.command(steps=10_000), check=True)          # first block
-subprocess.run(train.resume_command(steps=20_000), check=True)   # continue
+subprocess.run(train.command(steps=5_000), check=True)           # first block
+subprocess.run(train.resume_command(steps=10_000), check=True)   # continue
 
-train.complete_checkpoints()          # ['010000', '020000'] - partial ones are deleted
-train.checkpoint_path("020000")       # outputs/.../checkpoints/020000/pretrained_model
-train.keep_only({"020000"})           # a full checkpoint is ~12 GB
+train.complete_checkpoints()          # ['005000', '010000'] - partial ones are deleted
+train.checkpoint_path("010000")       # outputs/.../checkpoints/010000/pretrained_model
+train.keep_only({"010000"})           # a MolmoAct2 checkpoint is ~12 GB
 ```
+
+Every recipe trains at a three-second chunk (30 actions at 10 Hz) unless
+`chunk_size` says otherwise, so the architectures are compared at the same
+horizon; `tools/sweep_inference.py --arms shipped` scores a checkpoint at
+whatever chunk it was trained with. A warm start (`init_from`) takes the
+architecture from the checkpoint, so the recipe then only supplies the
+learning rates that `lr_scale` multiplies.
 
 Block-wise training with an evaluation between blocks, keeping the best
 checkpoint, is `examples/train_policy.py`; `training/train.sh` wraps it with

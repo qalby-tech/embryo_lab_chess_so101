@@ -22,6 +22,9 @@ exec $PY -u examples/train_policy.py \
   --eval-episodes "$EVAL_EPISODES" --eval-captures "${EVAL_CAPTURES:-0}" \
   --eval-max-steps "$EVAL_MAX_STEPS" \
   $([ "${INTERPOLATE:-1}" = "1" ] || echo --no-interpolate) \
+  --policy "${POLICY:-molmoact2}" \
+  $([ -n "${BASE_CHECKPOINT:-}" ] && echo --base "$BASE_CHECKPOINT") \
+  $([ -n "${CHUNK_SIZE:-}" ] && echo --chunk "$CHUNK_SIZE") \
   $([ -n "${INIT_FROM:-}" ] && echo --init-from "$INIT_FROM") \
   $([ -n "${LR_SCALE:-}" ] && echo --lr-scale "$LR_SCALE") \
   "$@"

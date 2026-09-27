@@ -97,6 +97,17 @@ def dataset_fps(root: str | None, default: int = DEFAULT_TARGET_HZ) -> int:
         return default
 
 
+def _camera_names(checkpoint: str) -> dict[str, str]:
+    """A run trained with `--rename_map` saved it in train_config.json next to
+    the weights; inverted, it says which of our cameras fills each feature."""
+    path = os.path.join(checkpoint, "train_config.json")
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as f:
+        rename = json.load(f).get("rename_map") or {}
+    return {new: old for old, new in rename.items()}
+
+
 class LeRobotPolicy:
     """Adapter around a LeRobot checkpoint: builds the observation the checkpoint
     asks for, and expands each emitted target into control-rate commands.
@@ -105,10 +116,12 @@ class LeRobotPolicy:
     need them.
     """
 
-    def __init__(self, config: LeRobotPolicyConfig, policy, processors, features: list[str]):
+    def __init__(self, config: LeRobotPolicyConfig, policy, processors, features: list[str],
+                 camera_names: dict[str, str] | None = None):
         self.config = config
         self.policy = policy
         self.features = features
+        self.camera_names = camera_names or {}     # checkpoint's visual feature -> our feature
         self.preprocess, self.postprocess = processors
         self._takes_inference_steps = _accepts_kwarg(policy.select_action, "num_steps")
         self._queue: list[np.ndarray] = []
@@ -129,7 +142,8 @@ class LeRobotPolicy:
                                               pretrained_path=config.checkpoint)
         if config.n_action_steps is not None and hasattr(policy.config, "n_action_steps"):
             policy.config.n_action_steps = config.n_action_steps   # reset() rebuilds the queue
-        return cls(config, policy, processors, list(policy.config.input_features))
+        return cls(config, policy, processors, list(policy.config.input_features),
+                   _camera_names(config.checkpoint))
 
     @property
     def policy_type(self) -> str:
@@ -138,8 +152,15 @@ class LeRobotPolicy:
     @property
     def cameras(self) -> tuple[Camera, ...]:
         """The cameras this checkpoint expects - configure the env to render these."""
-        return tuple(Camera(name[len(IMAGE_PREFIX):]) for name in self.features
-                     if name.startswith(IMAGE_PREFIX))
+        return tuple(camera for camera in map(self._camera, self.features) if camera is not None)
+
+    def _camera(self, feature: str) -> Camera | None:
+        """Which of our cameras feeds this visual feature - none for a slot the
+        checkpoint declares but was never trained with one of ours."""
+        if not feature.startswith(IMAGE_PREFIX):
+            return None
+        name = self.camera_names.get(feature, feature)[len(IMAGE_PREFIX):]
+        return Camera(name) if name in Camera.__members__.values() else None
 
     @property
     def chunk_size(self) -> int | None:
@@ -196,7 +217,9 @@ class LeRobotPolicy:
                 state = self.config.convention.from_radians(observation.joint_pos)
                 batch[name] = torch.from_numpy(state.astype(np.float32))[None].to(device)
             elif name.startswith(IMAGE_PREFIX):
-                camera = Camera(name[len(IMAGE_PREFIX):])
+                camera = self._camera(name)
+                if camera is None:
+                    continue                    # an empty slot; the policy pads it
                 if camera not in observation.images:
                     raise KeyError(f"the checkpoint needs camera {camera}; the env renders "
                                    f"{sorted(observation.images)}")

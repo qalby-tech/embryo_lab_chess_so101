@@ -30,13 +30,14 @@ class Arm(Config):
     """One inference setting to score."""
 
     label: str
-    n_action_steps: int
+    n_action_steps: int | None          # None: whatever the checkpoint ships
     num_inference_steps: int | None = None
 
 
 DEFAULT_ARMS = [
     Arm(label="horizon5", n_action_steps=5),                              # the measured default
-    Arm(label="horizon30", n_action_steps=30),                            # what the checkpoint ships
+    Arm(label="horizon30", n_action_steps=30),                            # what MolmoAct2 ships
+    Arm(label="shipped", n_action_steps=None),                            # any checkpoint's own horizon
     Arm(label="horizon5_flow20", n_action_steps=5, num_inference_steps=20),
     Arm(label="horizon5_flow40", n_action_steps=5, num_inference_steps=40),
 ]
@@ -76,7 +77,8 @@ def main():
                     help="only these arms by label, for extending one comparison cheaply")
     args = ap.parse_args()
 
-    arms = DEFAULT_ARMS if not args.arms else [a for a in DEFAULT_ARMS if a.label in args.arms]
+    arms = ([a for a in DEFAULT_ARMS if a.label != "shipped"] if not args.arms
+            else [a for a in DEFAULT_ARMS if a.label in args.arms])
     if not arms:
         raise SystemExit(f"no arms match {args.arms}; known: {[a.label for a in DEFAULT_ARMS]}")
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
@@ -115,11 +117,13 @@ def main():
                 continue
             # same seed per position, so every arm sees the same board, shift and start pose
             task = sampler.sample(env, random.Random(args.seed + index))
+            horizon = arm.n_action_steps or policy.chunk_size
             adapter = LeRobotPolicy(base.model_copy(update={
-                "n_action_steps": arm.n_action_steps,
+                "n_action_steps": horizon,
                 "num_inference_steps": arm.num_inference_steps}),
-                policy.policy, (policy.preprocess, policy.postprocess), policy.features)
-            adapter.policy.config.n_action_steps = arm.n_action_steps
+                policy.policy, (policy.preprocess, policy.postprocess), policy.features,
+                policy.camera_names)
+            adapter.policy.config.n_action_steps = horizon
             result = run_episode(env, adapter, task, rollout)
             outcomes[arm.label][index] = result.success
             with open(args.out, "a") as f:

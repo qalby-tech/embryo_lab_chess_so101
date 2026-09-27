@@ -1,15 +1,17 @@
-"""Fine-tuning MolmoAct2 on recorded demonstrations.
+"""Fine-tuning a LeRobot policy on recorded demonstrations.
 
-The flags below are the ones a run needs on this hardware, each with the reason
-it is there. Build a command and run it:
+The flags a run needs on this hardware, each with the reason it is there. What
+is common to every policy - the dataset, the step budget, the checkpoint
+cadence, a warm start - lives in `TrainConfig`; what a particular architecture
+needs lives in its `PolicyRecipe`. Build a command and run it:
 
-    config = MolmoAct2TrainConfig(dataset_root="datasets/lerobot/chess_mc",
-                                  output_dir="outputs/molmoact2_mc", total_steps=70_000)
-    subprocess.run(config.command(steps=10_000), check=True)     # first block
-    subprocess.run(config.resume_command(steps=20_000), check=True)
+    config = TrainConfig(recipe=RECIPES["smolvla"], dataset_root="datasets/lerobot/chess_mc",
+                         output_dir="outputs/smolvla_mc", total_steps=20_000)
+    subprocess.run(config.command(steps=5_000), check=True)     # first block
+    subprocess.run(config.resume_command(steps=10_000), check=True)
 
 `examples/train_policy.py` drives that loop and scores the checkpoints in the
-simulator between blocks.
+simulator between blocks, so every architecture is measured the same way.
 """
 from __future__ import annotations
 
@@ -24,20 +26,94 @@ from .tasks import TaskFamily
 
 ACCELERATE = "~/vla/venv/bin/accelerate"
 TRAIN_MODULE = "lerobot.scripts.lerobot_train"
-BASE_CHECKPOINT = "allenai/MolmoAct2-SO100_101"   # pretrained on this exact arm
-SETUP_TYPE = "single so100/so101 robotic arm in molmoact2"
-CONTROL_MODE = "absolute joint pose"
 MM_PER_M = 1000.0
 CHECKPOINT_DIR = "checkpoints"
-# MolmoAct2's own learning rates (lerobot configuration_molmoact2.py), one per
-# parameter group. The scheduler decays each group to decay/language of its peak.
-MOLMOACT2_LEARNING_RATES = {
-    "optimizer_lr": 1e-5,                     # language model (LoRA)
-    "optimizer_vit_lr": 5e-6,                 # vision encoder
-    "optimizer_connector_lr": 5e-6,           # vision-to-language connector
-    "optimizer_action_expert_lr": 5e-5,       # action expert - the part that moves the arm
-    "scheduler_decay_lr": 1e-6,               # floor, relative to optimizer_lr
-}
+
+
+class PolicyRecipe(Config):
+    """What one architecture needs from `lerobot-train` beyond the shared flags.
+
+    `learning_rates` are the model's own peak rates by flag name; `lr_scale`
+    on the run multiplies all of them together, floor included, so a warm
+    start can continue a converged policy at a fraction of its schedule.
+    """
+
+    policy_type: str
+    base: str                                   # the pretrained weights a fresh run starts from
+    chunk_size: int
+    n_action_steps: int
+    learning_rates: dict[str, float]
+    install_extra: str                          # `pip install lerobot[<this>]`
+
+    def fresh_start(self, base: str) -> list[str]:
+        """How a fresh run names its weights. Most policies open them by path."""
+        return [f"--policy.path={base}"]
+
+    def model_flags(self, run: "TrainConfig") -> list[str]:
+        return []
+
+
+class MolmoAct2Recipe(PolicyRecipe):
+    policy_type: str = "molmoact2"
+    base: str = "allenai/MolmoAct2-SO100_101"   # pretrained on this exact arm
+    chunk_size: int = 30
+    n_action_steps: int = 30
+    # MolmoAct2's own rates (lerobot configuration_molmoact2.py), one per
+    # parameter group. The scheduler decays each group to decay/language of its peak.
+    learning_rates: dict[str, float] = {
+        "optimizer_lr": 1e-5,                     # language model (LoRA)
+        "optimizer_vit_lr": 5e-6,                 # vision encoder
+        "optimizer_connector_lr": 5e-6,           # vision-to-language connector
+        "optimizer_action_expert_lr": 5e-5,       # action expert - the part that moves the arm
+        "scheduler_decay_lr": 1e-6,               # floor, relative to optimizer_lr
+    }
+    install_extra: str = "molmoact2"
+    train_mode_vlm: str = "lora"                  # 737M trainable of 5.6B at MolmoAct2's default rank
+    setup_type: str = "single so100/so101 robotic arm in molmoact2"
+    control_mode: str = "absolute joint pose"
+
+    def fresh_start(self, base: str) -> list[str]:
+        # MolmoAct2 builds itself from the upstream HF weights and loads trained
+        # weights on top, so the base goes through checkpoint_path, never path
+        return ["--policy.type=molmoact2", f"--policy.checkpoint_path={base}"]
+
+    def model_flags(self, run: "TrainConfig") -> list[str]:
+        image_keys = json.dumps([f"observation.images.{c}" for c in run.cameras])
+        return ["--policy.action_mode=both", f"--policy.train_mode_vlm={self.train_mode_vlm}",
+                f"--policy.setup_type={self.setup_type}", f"--policy.control_mode={self.control_mode}",
+                f"--policy.image_keys={image_keys}",
+                # mandatory: without it even batch 4 exhausts the card
+                "--policy.gradient_checkpointing=true", "--policy.normalize_gripper=true"]
+
+
+class SmolVLARecipe(PolicyRecipe):
+    """SmolVLA: a 450M-parameter VLM with a flow-matching action expert.
+
+    The base ships a 50-step chunk recorded at 30 Hz - under two seconds. Our
+    data is 10 Hz, so the same count would be five blind seconds; 30 keeps the
+    three-second chunk every other result here is measured at."""
+    policy_type: str = "smolvla"
+    base: str = "lerobot/smolvla_base"
+    chunk_size: int = 30
+    n_action_steps: int = 30
+    learning_rates: dict[str, float] = {"optimizer_lr": 1e-4, "scheduler_decay_lr": 2.5e-6}
+    install_extra: str = "smolvla"
+    # the base was trained on three cameras named camera1-3; ours map onto the
+    # first two and the third stays an empty slot, which keeps the token layout
+    # the base saw. The map is saved with the checkpoint, and `LeRobotPolicy`
+    # reads it back so the environment still renders `top` and `wrist`.
+    camera_names: dict[Camera, str] = {Camera.TOP: "camera1", Camera.WRIST: "camera2"}
+    empty_cameras: int = 1
+
+    def model_flags(self, run: "TrainConfig") -> list[str]:
+        rename = {f"observation.images.{c}": f"observation.images.{name}"
+                  for c, name in self.camera_names.items() if c in run.cameras}
+        return [f"--rename_map={json.dumps(rename)}", f"--policy.empty_cameras={self.empty_cameras}",
+                f"--policy.scheduler_warmup_steps={min(1000, run.total_steps // 20)}"]
+
+
+RECIPES: dict[str, PolicyRecipe] = {"molmoact2": MolmoAct2Recipe(), "smolvla": SmolVLARecipe()}
+BASE_CHECKPOINT = RECIPES["molmoact2"].base
 LAST = "last"
 PRETRAINED = "pretrained_model"
 TRAINING_STATE = "training_state"
@@ -96,15 +172,15 @@ class CheckpointScore(Config):
                 + f", median {self.median_mm:.1f} mm")
 
 
-class MolmoAct2TrainConfig(Config):
+class TrainConfig(Config):
     dataset_root: str
     output_dir: str
+    recipe: PolicyRecipe = RECIPES["molmoact2"]
     repo_id: str = DATASET_REPO
-    base_checkpoint: str = BASE_CHECKPOINT
+    base_checkpoint: str | None = None  # overrides the recipe's pretrained weights
     total_steps: int = 70_000
-    chunk_size: int = 30
-    n_action_steps: int = 30
-    # 8 with gradient checkpointing peaks at ~30 GB of a 32 GB card
+    chunk_size: int | None = None       # overrides the recipe's chunk, and the horizon with it
+    # 8 with gradient checkpointing peaks at ~30 GB of a 32 GB card for MolmoAct2
     batch_size: int = 8
     # same effective batch at a fraction of the activation memory; raise it with a
     # smaller batch on a smaller card
@@ -113,21 +189,26 @@ class MolmoAct2TrainConfig(Config):
     # spinning in futex, the workers polling, the GPU holding memory with nothing
     # executing. 0 loads in the training process itself.
     num_workers: int = 4
-    train_mode_vlm: str = "lora"        # 737M trainable of 5.6B at MolmoAct2's default rank
     cameras: tuple[Camera, ...] = ROBOT_CAMERAS
     # the GPU resets under load (nvlddmkm event 153) at random steps; saving often
     # keeps each reset cheap
     save_every: int = 500
     accelerate: str = ACCELERATE
     device: str = "cuda"
-    # A LeRobot checkpoint to continue from, on new data. Distinct from
-    # base_checkpoint: MolmoAct2 always builds itself from the upstream HF weights
-    # and loads trained weights on top, so a checkpoint of our own is reopened
-    # through --policy.path, never passed as the base.
+    # A checkpoint of our own to continue from, on new data; it carries its
+    # architecture and flags, so the recipe only supplies the learning rates.
     init_from: str | None = None
     # Scales every learning rate and the floor together. A warm start at the full
     # peak re-heats a converged policy to ten times the rate it finished at.
     lr_scale: float = 1.0
+
+    @property
+    def base(self) -> str:
+        return self.base_checkpoint or self.recipe.base
+
+    @property
+    def chunk(self) -> int:
+        return self.chunk_size or self.recipe.chunk_size
 
     @property
     def checkpoints_dir(self) -> str:
@@ -140,25 +221,20 @@ class MolmoAct2TrainConfig(Config):
 
     def command(self, steps: int) -> list[str]:
         """Start a run that trains up to `steps` total."""
-        image_keys = json.dumps([f"observation.images.{c}" for c in self.cameras])
-        # a fresh run names the policy type and its upstream weights; a warm start
-        # takes both from the checkpoint it continues
-        policy = ([f"--policy.path={self.init_from}"] if self.init_from else
-                  ["--policy.type=molmoact2", f"--policy.checkpoint_path={self.base_checkpoint}"])
+        # a fresh run names its pretrained weights; a warm start takes the
+        # architecture and every flag from the checkpoint it continues
+        policy = ([f"--policy.path={self.init_from}"] if self.init_from
+                  else self.recipe.fresh_start(self.base))
         return self._launcher() + [
             f"--dataset.repo_id={self.repo_id}", f"--dataset.root={self.dataset_root}",
             "--dataset.video_backend=pyav", "--dataset.image_transforms.enable=true",
-            *policy, f"--policy.device={self.device}", "--policy.action_mode=both",
-            f"--policy.train_mode_vlm={self.train_mode_vlm}",
-            f"--policy.chunk_size={self.chunk_size}", f"--policy.n_action_steps={self.n_action_steps}",
-            f"--policy.setup_type={SETUP_TYPE}", f"--policy.control_mode={CONTROL_MODE}",
-            f"--policy.image_keys={image_keys}",
-            # mandatory: without it even batch 4 exhausts the card
-            "--policy.gradient_checkpointing=true",
-            "--policy.normalize_gripper=true", "--policy.push_to_hub=false", "--wandb.enable=false",
+            *policy, f"--policy.device={self.device}",
+            f"--policy.chunk_size={self.chunk}", f"--policy.n_action_steps={self.chunk}",
+            *self.recipe.model_flags(self),
+            "--policy.push_to_hub=false", "--wandb.enable=false",
             f"--batch_size={self.batch_size}", f"--steps={steps}",
-            # MolmoAct2 decays its learning rate over a fixed 24,000 steps whatever
-            # --steps says; the first full run spent everything past that at the floor
+            # every LeRobot scheduler decays over its own fixed count whatever
+            # --steps says; the first full run spent everything past 24,000 at the floor
             f"--policy.scheduler_decay_steps={self.total_steps}",
             f"--accelerator.gradient_accumulation.steps={self.grad_accum}",
             f"--num_workers={self.num_workers}",
@@ -171,7 +247,7 @@ class MolmoAct2TrainConfig(Config):
         if self.lr_scale == 1.0:
             return []
         return [f"--policy.{name}={rate * self.lr_scale:g}"
-                for name, rate in MOLMOACT2_LEARNING_RATES.items()]
+                for name, rate in self.recipe.learning_rates.items()]
 
     def resume_command(self, steps: int) -> list[str]:
         """Continue the run to `steps` total; everything else comes from the saved config."""
@@ -217,3 +293,7 @@ class MolmoAct2TrainConfig(Config):
         for tag in self.complete_checkpoints():
             if tag not in tags:
                 shutil.rmtree(os.path.join(self.checkpoints_dir, tag), ignore_errors=True)
+
+
+# the name the first runs were written against
+MolmoAct2TrainConfig = TrainConfig

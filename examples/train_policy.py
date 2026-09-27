@@ -24,7 +24,7 @@ import time
 
 from chess_sim.hub import DATASET_REPO
 from chess_sim.rollout import EvaluationReport
-from chess_sim.training import CheckpointScore, MolmoAct2TrainConfig
+from chess_sim.training import RECIPES, CheckpointScore, TrainConfig
 
 BEST = "best.json"
 PYTHON = os.path.expanduser("~/vla/venv/bin/python")
@@ -61,6 +61,11 @@ def main():
     ap.add_argument("--root", default="datasets/lerobot/chess_mc")
     ap.add_argument("--repo-id", default=DATASET_REPO)
     ap.add_argument("--out", default="outputs/molmoact2_mc")
+    ap.add_argument("--policy", choices=sorted(RECIPES), default="molmoact2",
+                    help="the architecture; its flags and learning rates come from chess_sim.training.RECIPES")
+    ap.add_argument("--base", default=None, help="pretrained weights to start from; default is the recipe's")
+    ap.add_argument("--chunk", type=int, default=None,
+                    help="actions per policy call; default is the recipe's (30, three seconds at 10 Hz)")
     ap.add_argument("--lr-scale", type=float, default=1.0,
                     help="scale every learning rate and the floor; below 1 for continuing a "
                          "converged policy without knocking it off its optimum")
@@ -82,15 +87,16 @@ def main():
     ap.add_argument("--eval-max-steps", type=int, default=450)
     args = ap.parse_args()
 
-    settings = {"dataset_root": args.root, "repo_id": args.repo_id, "output_dir": args.out,
-                "total_steps": args.total_steps, "batch_size": args.batch_size,
+    settings = {"recipe": RECIPES[args.policy], "dataset_root": args.root, "repo_id": args.repo_id,
+                "output_dir": args.out, "total_steps": args.total_steps, "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum, "num_workers": args.num_workers,
-                "save_every": min(args.save_every, args.block)}
+                "save_every": min(args.save_every, args.block),
+                "base_checkpoint": args.base, "chunk_size": args.chunk}
     if args.init_from:
         settings["init_from"] = args.init_from
     if args.lr_scale != 1.0:
         settings["lr_scale"] = args.lr_scale
-    config = MolmoAct2TrainConfig(**settings)
+    config = TrainConfig(**settings)
     best_path = os.path.join(args.out, BEST)
     best = CheckpointScore.load(best_path)
     done = max((int(tag) for tag in config.complete_checkpoints()), default=0)
