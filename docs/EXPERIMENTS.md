@@ -373,6 +373,39 @@ shows the expert handling a piece moved 16 mm); a piece already on its side ends
 episode with no expert and no recording, since there is nothing to correct. The
 collection continued under the new rules from seed 703.
 
+### 4.10 Corrections from the policy's own failures: the first movement on captures
+
+The collection of §4.9 ran for two days against the published checkpoint at thirty actions
+per call, captures only: 6,056 policy episodes, 1,524 hand-overs recorded, 1,000 of them
+finished by the expert. Under the final trigger rules the expert fixed 422 of 434 stalled
+grasps and 96 of 190 shoves; 378 episodes ended at a knocked-over piece with nothing
+recorded. Exported at 89,862 frames and merged three times over into the rebalanced set
+(`tools/merge_datasets.py --repeat`): 11,083 episodes, 941,592 frames, 27% of them
+corrections. Continued from the published checkpoint for 15,000 steps at the tenth-rate
+schedule. Loss opened at 0.40, where the clean-data continuations sit - a correction is an
+ordinary expert demonstration from an unusual pose, and fits like one.
+
+| paired on the 300 positions, horizon 30 | overall | captures (100) | moves (200) |
+| --- | --- | --- | --- |
+| published 070000 | 227 | 68 | 159 |
+| more clean captures, full rate (§4.7) | 219 | 65 | 154 |
+| more clean captures, tenth rate (§4.7) | 231 | 68 | 163 |
+| noise-recorded recovery, tenth rate (§4.8) | 217 | 68 | 149 |
+| **corrections x3, tenth rate** | **233** | **78** | 155 |
+
+Four continuations of the same checkpoint with the same schedule on the same positions.
+Three changed the data in ways §5.7 said would not matter and moved captures by 0, 0 and 0.
+The one that put the expert's grasp at the policy's own failure states moved them by +10:
+the policy won 21 capture positions the published model lost and lost 11 the other way
+(p = 0.11), and the failure it was collected for - "still on the board", the piece never
+lifted - fell from 24 to 13. Against the tenth-rate clean continuation, the fairest
+control, captures are +10 again (19 to 9, p = 0.087). Moves are within noise every way
+they are paired (-4 against the published model, p = 0.69), tray misses went 4 -> 7, and
+the overall difference is +6 (p = 0.60). First movement in the predicted failure mode, and
+not yet a decisive one.
+
+The in-training checks read 28, 40 and 36 of 48 at the three blocks; the paired test was
+run on the final block by rule (§4.7), not on the block the check preferred.
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
