@@ -15,6 +15,7 @@ are published:
 | demonstrations | [XvKuoMing/so101_chess](https://huggingface.co/datasets/XvKuoMing/so101_chess) — 6,095 episodes, 497,565 frames, 10 fps |
 | showcase | [moves](https://huggingface.co/XvKuoMing/so101_chess_molmoact2/resolve/main/media/reel_moves.mp4) · [captures](https://huggingface.co/XvKuoMing/so101_chess_molmoact2/resolve/main/media/reel_captures.mp4) |
 | experiment record | [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) |
+| roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) — what comes next, in order, with costs and exit criteria |
 | worked examples | [docs/COOKBOOK.md](docs/COOKBOOK.md) |
 | building the rig | [docs/hardware.md](docs/hardware.md) |
 
