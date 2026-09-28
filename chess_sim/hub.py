@@ -1,8 +1,9 @@
 """Where the published policy, dataset and showcase videos live."""
 from __future__ import annotations
 
-MODEL_REPO = "XvKuoMing/so101_chess"      # MolmoAct2 + LoRA, 70,000 steps
-DATASET_REPO = "XvKuoMing/so101_chess"    # the demonstrations it was trained on
+MODEL_REPO = "XvKuoMing/so101_chess_molmoact2"           # MolmoAct2 + LoRA, 70,000 steps
+DAGGER_MODEL_REPO = "XvKuoMing/so101_chess_molmoact2_dagger"  # + 1,000 expert corrections
+DATASET_REPO = "XvKuoMing/so101_chess"    # the demonstrations both were trained on
 MODEL_COLLECTION = "XvKuoMing/models-so101-6aae68c3343d3bfa98934a11"
 DATASET_COLLECTION = "XvKuoMing/so101-datasets-6a8dd2002c9ff7c5a51dcc04"
 

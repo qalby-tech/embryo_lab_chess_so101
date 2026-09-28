@@ -154,7 +154,7 @@ exercised here on molmoact2.
 
 ```python
 from chess_sim import LeRobotPolicy, LeRobotPolicyConfig, MoveSampler, RolloutConfig, run_episode
-from chess_sim.hub import MODEL_REPO       # 'XvKuoMing/so101_chess'
+from chess_sim.hub import MODEL_REPO       # 'XvKuoMing/so101_chess_molmoact2'
 
 policy = LeRobotPolicy.load(LeRobotPolicyConfig.for_dataset(
     checkpoint=MODEL_REPO,                        # or a local checkpoint directory
@@ -375,7 +375,8 @@ rather than working around it at inference time.
 
 ```python
 from chess_sim import hub
-hub.MODEL_REPO        # XvKuoMing/so101_chess - MolmoAct2 + LoRA, 70,000 steps
+hub.MODEL_REPO        # XvKuoMing/so101_chess_molmoact2 - MolmoAct2 + LoRA, 70,000 steps
+hub.DAGGER_MODEL_REPO # XvKuoMing/so101_chess_molmoact2_dagger - continued on 1,000 corrections
 hub.DATASET_REPO      # XvKuoMing/so101_chess - 6,095 episodes, 497,565 frames
 hub.SHOWCASE          # {'moves': ..., 'captures': ...} - the reels on the model page
 ```

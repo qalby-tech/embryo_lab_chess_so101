@@ -10,9 +10,10 @@ are published:
 
 | | |
 | --- | --- |
-| policy | [XvKuoMing/so101_chess](https://huggingface.co/XvKuoMing/so101_chess) — MolmoAct2 5B + LoRA, 70,000 steps |
+| policy | [XvKuoMing/so101_chess_molmoact2](https://huggingface.co/XvKuoMing/so101_chess_molmoact2) — MolmoAct2 5B + LoRA, 70,000 steps |
+| corrected policy | [XvKuoMing/so101_chess_molmoact2_dagger](https://huggingface.co/XvKuoMing/so101_chess_molmoact2_dagger) — the same, continued on 1,000 expert corrections from its own missed grasps; captures 78/100 against 68 at the shipped horizon |
 | demonstrations | [XvKuoMing/so101_chess](https://huggingface.co/datasets/XvKuoMing/so101_chess) — 6,095 episodes, 497,565 frames, 10 fps |
-| showcase | [moves](https://huggingface.co/XvKuoMing/so101_chess/resolve/main/media/reel_moves.mp4) · [captures](https://huggingface.co/XvKuoMing/so101_chess/resolve/main/media/reel_captures.mp4) |
+| showcase | [moves](https://huggingface.co/XvKuoMing/so101_chess_molmoact2/resolve/main/media/reel_moves.mp4) · [captures](https://huggingface.co/XvKuoMing/so101_chess_molmoact2/resolve/main/media/reel_captures.mp4) |
 | experiment record | [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) |
 | worked examples | [docs/COOKBOOK.md](docs/COOKBOOK.md) |
 | building the rig | [docs/hardware.md](docs/hardware.md) |
