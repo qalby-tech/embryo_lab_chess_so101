@@ -412,6 +412,27 @@ scores 242/300 against the published 241 - captures 10 to 10, moves 33 to 32. Th
 corrections bought the shipped horizon its ten captures without costing the short one
 anything, which is what a fix for open-loop drift should look like: it matters where
 the loop is open, and nowhere else.
+### 4.11 SmolVLA on the same data: no localisation
+
+Whether a 450M-parameter model could stand in for the 5.6B one, to make every later
+iteration six times cheaper. SmolVLA from `lerobot/smolvla_base` on the corrections set,
+its two camera slots fed by our overhead and wrist views, a 30-action chunk, batch 32,
+20,000 steps at 1.5 steps per second and 12 GB - the defaults otherwise, which freeze the
+language model and the vision encoder and train the action expert.
+
+| in-training check | 5,000 | 10,000 | 15,000 | 20,000 |
+| --- | --- | --- | --- | --- |
+| successes of 48 | 0 | 0 | 2 | 1 |
+| median placement error | 80 mm | 80 mm | 94 mm | 104 mm |
+
+Not a plumbing fault: on training frames the checkpoint's next action is within a degree
+of the recorded one, and in a live episode the arm goes to the right region of the board
+and knocks the piece over instead of closing on it. It learned the motion and not the
+square. Stopped at the user's call before the paired test, checkpoints deleted, the
+recipe kept. A run with the whole model trainable (`training/settings.smolvla_full.env`)
+is the one untried variant; the decision was to spend the GPU on a wider training
+distribution for MolmoAct2 instead.
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
