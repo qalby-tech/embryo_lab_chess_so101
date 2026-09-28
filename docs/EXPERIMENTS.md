@@ -406,6 +406,12 @@ not yet a decisive one.
 
 The in-training checks read 28, 40 and 36 of 48 at the three blocks; the paired test was
 run on the final block by rule (§4.7), not on the block the check preferred.
+
+At five actions per call, the setting recommended for simulation, the same checkpoint
+scores 242/300 against the published 241 - captures 10 to 10, moves 33 to 32. The
+corrections bought the shipped horizon its ten captures without costing the short one
+anything, which is what a fix for open-loop drift should look like: it matters where
+the loop is open, and nowhere else.
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
