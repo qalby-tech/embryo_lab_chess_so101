@@ -201,6 +201,9 @@ class TrainConfig(Config):
     # Scales every learning rate and the floor together. A warm start at the full
     # peak re-heats a converged policy to ten times the rate it finished at.
     lr_scale: float = 1.0
+    # Anything else for `lerobot-train`, verbatim - a recipe's default worth
+    # varying for one run, such as --policy.train_expert_only=false
+    extra_flags: tuple[str, ...] = ()
 
     @property
     def base(self) -> str:
@@ -241,6 +244,7 @@ class TrainConfig(Config):
             f"--save_freq={self.save_every}", "--env_eval_freq=-1",
             f"--output_dir={self.output_dir}",
             *self._learning_rates(),
+            *self.extra_flags,
         ]
 
     def _learning_rates(self) -> list[str]:

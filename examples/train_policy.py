@@ -66,6 +66,8 @@ def main():
     ap.add_argument("--base", default=None, help="pretrained weights to start from; default is the recipe's")
     ap.add_argument("--chunk", type=int, default=None,
                     help="actions per policy call; default is the recipe's (30, three seconds at 10 Hz)")
+    ap.add_argument("--policy-flags", nargs="*", default=[],
+                    help="extra lerobot-train flags, verbatim, e.g. --policy.train_expert_only=false")
     ap.add_argument("--lr-scale", type=float, default=1.0,
                     help="scale every learning rate and the floor; below 1 for continuing a "
                          "converged policy without knocking it off its optimum")
@@ -91,7 +93,8 @@ def main():
                 "output_dir": args.out, "total_steps": args.total_steps, "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum, "num_workers": args.num_workers,
                 "save_every": min(args.save_every, args.block),
-                "base_checkpoint": args.base, "chunk_size": args.chunk}
+                "base_checkpoint": args.base, "chunk_size": args.chunk,
+                "extra_flags": tuple(args.policy_flags)}
     if args.init_from:
         settings["init_from"] = args.init_from
     if args.lr_scale != 1.0:

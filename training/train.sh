@@ -27,4 +27,5 @@ exec $PY -u examples/train_policy.py \
   $([ -n "${CHUNK_SIZE:-}" ] && echo --chunk "$CHUNK_SIZE") \
   $([ -n "${INIT_FROM:-}" ] && echo --init-from "$INIT_FROM") \
   $([ -n "${LR_SCALE:-}" ] && echo --lr-scale "$LR_SCALE") \
+  $([ -n "${POLICY_FLAGS:-}" ] && echo --policy-flags $POLICY_FLAGS) \
   "$@"
