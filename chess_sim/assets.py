@@ -54,8 +54,10 @@ def piece_asset_name(piece: chess.Piece) -> str:
 def available_piece_sets(verified_only: bool = False) -> list[str]:
     """Every set the scene can build: the vendored one first, then the imported ones.
     `verified_only` keeps the imported sets the scripted expert passed on."""
-    imported = sorted(d for d in os.listdir(PIECE_SETS_DIR)
-                      if os.path.isfile(os.path.join(PIECE_SETS_DIR, d, "king", "king.obj"))) \
+    def complete(d: str) -> bool:        # a set is found by its king, one- or two-coloured
+        return (os.path.isfile(os.path.join(PIECE_SETS_DIR, d, "king", "king.obj"))
+                or os.path.isfile(os.path.join(PIECE_SETS_DIR, d, "white_king", "white_king.obj")))
+    imported = sorted(d for d in os.listdir(PIECE_SETS_DIR) if complete(d)) \
         if os.path.isdir(PIECE_SETS_DIR) else []
     if verified_only:
         path = os.path.join(PIECE_SETS_DIR, VERIFIED_FILE)
@@ -69,13 +71,33 @@ def available_piece_sets(verified_only: bool = False) -> list[str]:
 
 
 def single_colour(piece_set: str) -> bool:
-    return piece_set != DEFAULT_SET
+    """One light mesh per type, the black side tinted - unless the set brings its
+    own black pieces (black_<type>/), as the vendored set and the token sets do."""
+    if piece_set == DEFAULT_SET:
+        return False
+    return not os.path.isdir(os.path.join(PIECE_SETS_DIR, piece_set, "black_king"))
+
+
+@lru_cache(maxsize=None)
+def set_properties(piece_set: str) -> dict:
+    """piece_sets/<set>/set.json, if any. `"scale": "absolute"` means the meshes are
+    already in metres at their true size - tokens, not Staunton pieces - and are
+    not stretched to chess heights."""
+    path = os.path.join(PIECE_SETS_DIR, piece_set, "set.json")
+    if piece_set == DEFAULT_SET or not os.path.isfile(path):
+        return {}
+    import json
+    with open(path) as f:
+        return json.load(f)
 
 
 def _piece_dir(piece: chess.Piece, piece_set: str) -> tuple[str, str]:
     if piece_set == DEFAULT_SET:
         name = piece_asset_name(piece)
         return os.path.join(ASSET_DIR, "pieces", name), name
+    if not single_colour(piece_set):
+        name = piece_asset_name(piece)
+        return os.path.join(PIECE_SETS_DIR, piece_set, name), name
     name = _TYPE_NAME[piece.piece_type]
     return os.path.join(PIECE_SETS_DIR, piece_set, name), name
 
@@ -184,9 +206,12 @@ def piece_geometry(piece: chess.Piece, square: float, piece_scale: float = 1.0,
     path = piece_obj_path(piece, piece_set)
     lo, hi = _bounds(path)
     extent = hi - lo
-    target_h = _PIECE_HEIGHT[piece.piece_type] * (square / _REFERENCE_SQUARE) * piece_scale
-    scale = min(target_h / max(extent[2], 1e-6),
-                0.88 * square * piece_scale / max(extent[0], extent[1], 1e-6))
+    fit = 0.88 * square * piece_scale / max(extent[0], extent[1], 1e-6)   # footprint inside a square
+    if set_properties(piece_set).get("scale") == "absolute":
+        scale = min(piece_scale, fit)
+    else:
+        target_h = _PIECE_HEIGHT[piece.piece_type] * (square / _REFERENCE_SQUARE) * piece_scale
+        scale = min(target_h / max(extent[2], 1e-6), fit)
     profile = tuple(
         (float(lo[2] + b * extent[2]) * scale, float(lo[2] + t * extent[2]) * scale,
          (_radius_at(path, f) + 0.0004) * scale)
