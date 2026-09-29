@@ -72,6 +72,26 @@ def problem(src: str) -> str | None:
     return None
 
 
+def match_material(target: str, borrowed: list[str]) -> None:
+    """Give borrowed pieces the set's own material: a flat texture in the mean colour
+    of the generated pieces' textures, with a little grain so it does not read as paint."""
+    from PIL import Image
+
+    own = [p for p in PIECES if p not in borrowed]
+    pixels = []
+    for p in own:
+        image = np.asarray(Image.open(os.path.join(target, p, "material_0.png")).convert("RGB"), float)
+        flat = image.reshape(-1, 3)
+        # generated textures carry black padding around the UV islands; leave it out
+        pixels.append(flat[flat.sum(axis=1) > 60])
+    colour = np.concatenate(pixels).mean(axis=0)
+    rng = np.random.default_rng(0)
+    for p in borrowed:
+        grain = rng.normal(0, 6, (512, 512, 1))
+        texture = np.clip(colour + grain, 0, 255).astype(np.uint8)
+        Image.fromarray(texture).save(os.path.join(target, p, "material_0.png"))
+
+
 def audit(source: str) -> None:
     """Move every malformed piece's output to <set>/rejected/ so a retry regenerates it."""
     for name in sorted(os.listdir(source)):
@@ -125,6 +145,7 @@ def main():
                 if os.path.isfile(os.path.join(vendored, extra)):
                     shutil.copyfile(os.path.join(vendored, extra), os.path.join(target, p, extra))
         if missing:
+            match_material(target, missing)
             with open(os.path.join(target, "fallbacks.json"), "w") as f:
                 json.dump(missing, f)
         if problems:
