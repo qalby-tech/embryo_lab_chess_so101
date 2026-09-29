@@ -54,7 +54,10 @@ class ReachMap:
                 executed: dict[int, float] | None = None) -> "ReachMap":
         """`tool_query(target) -> (IkResult, tool_rotation)` for a world target;
         the rotation's first column is the tool x (approach) axis."""
-        executed = load_executed_reach() if executed is None else executed
+        if executed is None:
+            # measured per square on the published board; on any other board the
+            # same square index is somewhere else, and only the IK check applies
+            executed = load_executed_reach() if board.calibrated else {}
         ax, ay, _ = board.arm_base
         squares, lean = set(), {}
         for sq in chess.SQUARES:

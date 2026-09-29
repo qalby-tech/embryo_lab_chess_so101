@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 from chess_sim.assets import available_piece_sets
-from chess_sim import (ActionNoiseConfig, AppearanceConfig, CaptureSampler, ChessSimEnv, ControlConfig,
+from chess_sim import (ActionNoiseConfig, AppearanceConfig, BoardConfig, CaptureSampler, ChessSimEnv, ControlConfig,
                        EnvConfig, EpisodeRecorder, MoveSampler, RecorderConfig, TaskFamily, demonstrate)
 
 SHARD_PREFIX = "shard_"
@@ -32,13 +32,14 @@ SEED_STRIDE = 1000      # keeps shards' random streams apart
 
 def collect(out: str, episodes: int, seed: int, randomize: bool, image_size: tuple[int, int],
             moves: tuple[str, ...], family: TaskFamily, noise: ActionNoiseConfig,
-            piece_sets: tuple[str, ...] = ("default",)) -> tuple[int, int]:
+            piece_sets: tuple[str, ...] = ("default",), vary_board: bool = False) -> tuple[int, int]:
     """Record `episodes` demonstrations into `out`; returns (successes, episodes)."""
     rng, looks = random.Random(seed), np.random.default_rng(seed)
     # One scene per process: piece size and the board texture are baked into the
     # compiled model, and every rebuild leaks about a gigabyte of driver memory.
     # Size, piece set and board vary across chunks instead, colors and lighting per episode.
-    config = EnvConfig(appearance=AppearanceConfig.sample(looks, piece_sets=piece_sets) if randomize
+    config = EnvConfig(board=BoardConfig.sample(looks) if vary_board else BoardConfig(),
+                       appearance=AppearanceConfig.sample(looks, piece_sets=piece_sets) if randomize
                        else AppearanceConfig(piece_set=piece_sets[0]),
                        control=ControlConfig(image_size=image_size), action_noise=noise)
     env = ChessSimEnv(config)
@@ -79,6 +80,8 @@ def main():
     ap.add_argument("--noise-hold", type=int, default=ActionNoiseConfig().hold,
                     help="control steps each perturbation lasts")
     ap.add_argument("--out", default="datasets/chess")
+    ap.add_argument("--vary-board", action="store_true",
+                    help="a different board per chunk: square size, border, thickness, distance to the arm")
     ap.add_argument("--piece-sets", nargs="*", default=["default"],
                     help="piece sets to draw from, one per chunk; 'all' for every set the expert passed "
                          "(see chess_sim.assets.available_piece_sets)")
@@ -98,7 +101,7 @@ def main():
         count = min(args.chunk, remaining)
         jobs.append((os.path.join(args.out, f"{SHARD_PREFIX}{index:04d}"), count,
                      args.seed + SEED_STRIDE * index, args.randomize, tuple(args.image_size),
-                     moves, args.task, noise, piece_sets))
+                     moves, args.task, noise, piece_sets, args.vary_board))
         remaining -= count
         index += 1
 

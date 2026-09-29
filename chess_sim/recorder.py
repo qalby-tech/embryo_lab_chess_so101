@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import imageio.v2 as imageio
 import numpy as np
 
-from .config import (JOINTS, ROBOT_CAMERAS, ActionNoiseConfig, AppearanceConfig, Camera, Config,
+from .config import (JOINTS, ROBOT_CAMERAS, ActionNoiseConfig, AppearanceConfig, BoardConfig, Camera, Config,
                      RecoveryTrigger)
 from .env import ChessSimEnv, Layout, Record, TaskResult
 from .tasks import Task, TaskFamily
@@ -43,6 +43,7 @@ class EpisodeMeta(Record):
     fen: str
     layout: Layout
     appearance: AppearanceConfig | None
+    board: BoardConfig | None = None          # set with the appearance when the board varies
     fps: int
     joints: list[str]
     cameras: list[str]
@@ -84,6 +85,7 @@ class EpisodeRecorder:
         self._meta = EpisodeMeta(
             episode=self._index, instruction=task.instruction, task=task.family, move=task.label,
             fen=self.env.position.fen(), layout=self.env.layout,
+            board=self.env.board if record_appearance else None,
             appearance=self.env.config.appearance if record_appearance else None,
             recovery=recovery,
             action_noise=self.env.config.action_noise if self.env.config.action_noise.enabled else None,

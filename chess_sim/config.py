@@ -165,6 +165,27 @@ class BoardConfig(Config):
         half = self.field / 2
         return abs(xy[0] - self.origin[0]) <= half and abs(xy[1] - self.origin[1]) <= half
 
+    @classmethod
+    def sample(cls, rng: np.random.Generator) -> "BoardConfig":
+        """A board as people own them: 25-31 mm squares, a thin to wide border, a
+        vinyl roll-up to a thick wooden slab, set down a little nearer or further
+        from the arm. The tray follows the board's edge. A quarter are the
+        published board; which squares the arm can work on is recomputed for each
+        board (`ReachMap`), and tasks only come from those."""
+        if rng.random() < PUBLISHED_BOARD_CHANCE:
+            return cls()
+        u = rng.uniform
+        square, border = float(u(*BOARD_SQUARE_RANGE)), float(u(*BOARD_BORDER_RANGE))
+        width = 8 * square + 2 * border
+        return cls(square=square, border=border, thickness=float(u(*BOARD_THICKNESS_RANGE)),
+                   arm_gap=float(u(*BOARD_ARM_GAP_RANGE)),
+                   tray_x=-(width / 2 + float(u(*TRAY_MARGIN_RANGE))))
+
+    @property
+    def calibrated(self) -> bool:
+        """Is this the board the per-square servo calibration was measured on?"""
+        return self.model_copy(update={"origin": (0.0, 0.0)}) == BoardConfig()
+
     def tray_slot(self, index: int) -> tuple[float, float]:
         """Where a piece taken off the board is set down.
 
@@ -180,6 +201,14 @@ class BoardConfig(Config):
         return (self.width / 2 + self.graveyard_gap + col * self.graveyard_pitch,
                 -self.field / 2 + row * self.graveyard_pitch)
 
+
+# Boards as people own them (BoardConfig.sample)
+PUBLISHED_BOARD_CHANCE = 0.25
+BOARD_SQUARE_RANGE = (0.025, 0.031)
+BOARD_BORDER_RANGE = (0.006, 0.025)
+BOARD_THICKNESS_RANGE = (0.003, 0.020)       # a vinyl roll-up to a thick wooden board
+BOARD_ARM_GAP_RANGE = (0.065, 0.100)
+TRAY_MARGIN_RANGE = (0.025, 0.045)           # tray beside the board's left edge
 
 # Plausible looks for domain randomization: wood or painted boards, ivory-to-cream
 # white sets, black-to-dark-colored black sets, varied table and lighting.
