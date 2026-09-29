@@ -125,10 +125,26 @@ def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig
     # the overhead image is upright along the files (white at the bottom) and
     # framed on the board: at this distance the board fills ~86% of the frame
     # height, which is what a policy needs to tell one square from another
-    _add_camera(spec, Camera.TOP, camera_pos, (0.0, 0.0, board.top), fovy=24, up=(0.0, 1.0, 0.0))
+    pos, target, fovy, up = _overhead_camera(board, appearance, camera_pos)
+    _add_camera(spec, Camera.TOP, pos, target, fovy=fovy, up=up)
     # last, because merging the arm's MJCF brings that model's visual settings with it
     spec.visual.global_.offwidth, spec.visual.global_.offheight = OFFSCREEN_SIZE
     return spec
+
+
+def _overhead_camera(board, appearance, mast_lens):
+    """Where the overhead camera is, what it looks at, its field of view and its up
+    direction - the published rig unless the appearance moves it."""
+    cx, cy = board.origin
+    if appearance.camera_height is None:
+        return mast_lens, (cx, cy, board.top), 24.0, (0.0, 1.0, 0.0)
+    t = appearance.camera_over_board
+    x = (1 - t) * mast_lens[0] + t * cx
+    y = (1 - t) * mast_lens[1] + t * cy
+    target = (cx + appearance.camera_aim[0], cy + appearance.camera_aim[1], board.top)
+    roll = np.radians(appearance.camera_roll)
+    up = (float(np.sin(roll)), float(np.cos(roll)), 0.0)
+    return (x, y, board.top + appearance.camera_height), target, appearance.camera_fovy, up
 
 
 MAST_SIDE = 0.16      # mast axis this far beside the arm axis (+x: the arm's right)

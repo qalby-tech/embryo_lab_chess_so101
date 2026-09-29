@@ -196,6 +196,16 @@ BLACK_TINT_RANGE = (0.5, 1.0)
 TABLE_RGB_RANGE = ((0.2, 0.15, 0.1), (0.75, 0.65, 0.55))
 LIGHT_INTENSITY_RANGE = (0.6, 1.4)
 LIGHT_ELEVATION_RANGE = (40, 75)             # degrees above the table
+BOARD_LABELS_CHANCE = 0.5
+# overhead camera: a third of the episodes keep the published mast rig; the rest put
+# a camera anywhere from the mast to a boom arm over the board, 35-72 cm up (a C920
+# on a desk arm frames the board from ~37 cm), aimed within 12 mm of the centre
+PUBLISHED_RIG_CHANCE = 0.33
+CAMERA_HEIGHT_RANGE = (0.35, 0.72)
+CAMERA_FRAMED_HALF_WIDTH = 0.150             # half the strip that should fill the frame
+CAMERA_FOVY_SLACK = (0.93, 1.10)
+CAMERA_AIM = 0.012
+CAMERA_ROLL = 5.0
 
 
 class AppearanceConfig(Config):
@@ -207,6 +217,16 @@ class AppearanceConfig(Config):
 
     piece_scale: float = Field(1.0, ge=PIECE_SCALE_LIMITS[0], le=PIECE_SCALE_LIMITS[1])
     piece_set: str = "default"            # see chess_sim.assets.available_piece_sets()
+    board_labels: bool = False            # a-h and 1-8 printed on the border
+    # The overhead camera. None keeps the published rig: the lens on the mast beside
+    # the arm, 678 mm above the board, 24 degrees. Otherwise the lens sits `camera_height`
+    # above the board, `camera_over_board` of the way from the mast to straight above
+    # the board centre (a boom arm), looking at the centre plus `camera_aim`.
+    camera_height: float | None = None
+    camera_fovy: float = 24.0
+    camera_over_board: float = 0.0
+    camera_aim: tuple[float, float] = (0.0, 0.0)
+    camera_roll: float = 0.0              # degrees about the view axis
     white_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)  # tint over the texture
     black_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
     light_square: tuple[int, int, int] = (214, 178, 132)   # board colors, 0-255
@@ -230,7 +250,18 @@ class AppearanceConfig(Config):
             dark = tuple(int(u(*PAINTED_BASE_RANGE) + (PAINTED_HUE_BOOST if hue == c else 0))
                          for c in range(3))
         azimuth, elevation = u(0, 2 * np.pi), np.radians(u(*LIGHT_ELEVATION_RANGE))
+        camera = {}
+        if rng.random() >= PUBLISHED_RIG_CHANCE:
+            height = float(u(*CAMERA_HEIGHT_RANGE))
+            # frame the board whatever the height, the way a person sets a camera up
+            framed = float(np.degrees(2 * np.arctan(CAMERA_FRAMED_HALF_WIDTH / height)))
+            camera = dict(camera_height=height,
+                          camera_fovy=framed * float(u(*CAMERA_FOVY_SLACK)),
+                          camera_over_board=float(u(0.0, 1.0)),
+                          camera_aim=tuple(float(v) for v in u(-CAMERA_AIM, CAMERA_AIM, 2)),
+                          camera_roll=float(u(-CAMERA_ROLL, CAMERA_ROLL)))
         return cls(piece_scale=float(u(*piece_scale_range)), piece_set=piece_set,
+                   board_labels=bool(rng.random() < BOARD_LABELS_CHANCE), **camera,
                    white_rgba=(*(float(v) for v in u(*WHITE_TINT_RANGE)), 1.0),
                    black_rgba=(*(float(u(*BLACK_TINT_RANGE)) for _ in range(3)), 1.0),
                    light_square=light, dark_square=dark,
@@ -243,9 +274,10 @@ class AppearanceConfig(Config):
 
     @property
     def board_key(self) -> str:
-        """Identifies the board texture (its colors) for caching."""
-        return "-".join(f"{c:02x}" for rgb in (self.light_square, self.dark_square, self.border)
-                        for c in rgb)
+        """Identifies the board texture (its colors and labels) for caching."""
+        key = "-".join(f"{c:02x}" for rgb in (self.light_square, self.dark_square, self.border)
+                       for c in rgb)
+        return key + ("-labels" if self.board_labels else "")
 
 
 class ControlConfig(Config):

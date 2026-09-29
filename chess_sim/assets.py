@@ -209,7 +209,8 @@ def ensure_scene_assets(board, appearance=None) -> str:
         path = os.path.join(GENERATED_DIR, f"board_{appearance.board_key}.png")
         colors = (appearance.light_square, appearance.dark_square, appearance.border)
     if not os.path.exists(path):
-        _write_board_texture(path, board, colors)
+        _write_board_texture(path, board, colors,
+                             labels=bool(appearance is not None and appearance.board_labels))
     return os.path.relpath(path, ASSET_DIR)
 
 
@@ -217,8 +218,9 @@ _DEFAULT_BOARD_COLORS = ((214, 178, 132), (99, 64, 40), (92, 58, 32))
 _DEFAULT_BOARD_KEY = "-".join(f"{c:02x}" for rgb in _DEFAULT_BOARD_COLORS for c in rgb)
 
 
-def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128) -> None:
-    from PIL import Image
+def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128,
+                         labels: bool = False) -> None:
+    from PIL import Image, ImageDraw, ImageFont
 
     light, dark, border = colors or _DEFAULT_BOARD_COLORS
     rng = np.random.default_rng(0)
@@ -241,7 +243,23 @@ def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128
             for c in range(3):
                 img[y0:y0 + px_per_square, x0:x0 + px_per_square, c] = wood(
                     (px_per_square, px_per_square), rgb[c])
-    Image.fromarray(img.astype(np.uint8)).save(path)
+    image = Image.fromarray(img.astype(np.uint8))
+    if labels and border_px >= 24:
+        # files along the near and far borders, ranks along the sides, as printed boards
+        # have them; the image's row 0 is the far (rank 8) edge
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default(size=int(border_px * 0.6))
+        ink = tuple(int(v) for v in (np.array(light) * 0.9))
+        for i in range(8):
+            file_ = "abcdefgh"[i]
+            x = border_px + (i + 0.5) * px_per_square
+            for y in (border_px / 2, size - border_px / 2):
+                draw.text((x, y), file_, fill=ink, font=font, anchor="mm")
+            rank = str(8 - i)
+            y = border_px + (i + 0.5) * px_per_square
+            for x in (border_px / 2, size - border_px / 2):
+                draw.text((x, y), rank, fill=ink, font=font, anchor="mm")
+    image.save(path)
 
 
 def _write_backdrop(obj_path: str, image_path: str,
