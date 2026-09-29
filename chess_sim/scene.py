@@ -24,6 +24,11 @@ ARM_PREFIX = "so101:"
 # printable figure, and a bigger buffer costs nothing until something asks for it
 OFFSCREEN_SIZE = (1280, 960)
 KEY_LIGHT_DIFFUSE = np.array([0.85, 0.82, 0.75])
+FILL_LIGHT_DIFFUSE = np.array([0.35, 0.36, 0.4])
+
+
+def key_diffuse(appearance) -> np.ndarray:
+    return KEY_LIGHT_DIFFUSE * appearance.light_intensity * np.asarray(appearance.light_color)
 class CameraMount(Config):
     """Where a camera sits and what it looks at, in the frame it is mounted in."""
 
@@ -190,11 +195,12 @@ def _add_environment(spec, board, appearance):
                             material="backdrop_mat", contype=0, conaffinity=0, group=1)
     key_dir = np.asarray(appearance.light_dir, dtype=float)
     key_dir /= np.linalg.norm(key_dir)
-    spec.worldbody.add_light(name="key", pos=list(-2.4 * key_dir + [0, 0, 0.4]), dir=list(key_dir),
-                             diffuse=list(KEY_LIGHT_DIFFUSE * appearance.light_intensity),
-                             specular=[0.3, 0.3, 0.3], castshadow=True)
+    key = spec.worldbody.add_light(name="key", pos=list(-2.4 * key_dir + [0, 0, 0.4]), dir=list(key_dir),
+                                   diffuse=list(key_diffuse(appearance)), ambient=[appearance.ambient] * 3,
+                                   specular=[0.3, 0.3, 0.3], castshadow=True)
+    key.bulbradius = appearance.shadow_softness
     spec.worldbody.add_light(name="fill", pos=[-1.2, 1.0, 1.8], dir=[0.5, -0.4, -1],
-                             diffuse=[0.35, 0.36, 0.4], castshadow=False)
+                             diffuse=list(FILL_LIGHT_DIFFUSE * appearance.fill_intensity), castshadow=False)
     # table and arm pedestal
     spec.worldbody.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX,
                             size=[0.36, 0.30, board.table_top / 2],

@@ -223,7 +223,12 @@ PAINTED_HUE_BOOST = 70
 WHITE_TINT_RANGE = ((0.8, 0.75, 0.6), (1.0, 1.0, 1.0))
 BLACK_TINT_RANGE = (0.5, 1.0)
 TABLE_RGB_RANGE = ((0.2, 0.15, 0.1), (0.75, 0.65, 0.55))
-LIGHT_INTENSITY_RANGE = (0.6, 1.4)
+LIGHT_INTENSITY_RANGE = (0.45, 1.6)
+WARM_LIGHT = (1.0, 0.80, 0.60)               # a tungsten lamp
+COOL_LIGHT = (0.86, 0.93, 1.06)              # overcast daylight from a window
+FILL_INTENSITY_RANGE = (0.3, 1.6)
+AMBIENT_RANGE = (0.0, 0.25)
+SHADOW_SOFTNESS_RANGE = (0.02, 0.40)
 LIGHT_ELEVATION_RANGE = (40, 75)             # degrees above the table
 BOARD_LABELS_CHANCE = 0.5
 # overhead camera: a third of the episodes keep the published mast rig; the rest put
@@ -264,6 +269,10 @@ class AppearanceConfig(Config):
     table_rgb: tuple[float, float, float] = (0.42, 0.28, 0.17)   # 0-1
     light_intensity: float = 1.0                                 # key light brightness multiplier
     light_dir: tuple[float, float, float] = (-0.3, 0.3, -1.0)    # key light direction (world)
+    light_color: tuple[float, float, float] = (1.0, 1.0, 1.0)    # key light tint: warm lamp to cool daylight
+    fill_intensity: float = 1.0                                  # the soft light from the room
+    ambient: float = 0.0                                         # light from everywhere, flattens shadows
+    shadow_softness: float = 0.02                                # key light's radius, metres: hard to soft shadows
 
     @classmethod
     def sample(cls, rng: np.random.Generator,
@@ -289,7 +298,11 @@ class AppearanceConfig(Config):
                           camera_over_board=float(u(0.0, 1.0)),
                           camera_aim=tuple(float(v) for v in u(-CAMERA_AIM, CAMERA_AIM, 2)),
                           camera_roll=float(u(-CAMERA_ROLL, CAMERA_ROLL)))
+        warmth = float(u(0.0, 1.0))
+        light_color = tuple(float(w + (c - w) * warmth) for w, c in zip(WARM_LIGHT, COOL_LIGHT))
         return cls(piece_scale=float(u(*piece_scale_range)), piece_set=piece_set,
+                   light_color=light_color, fill_intensity=float(u(*FILL_INTENSITY_RANGE)),
+                   ambient=float(u(*AMBIENT_RANGE)), shadow_softness=float(u(*SHADOW_SOFTNESS_RANGE)),
                    board_labels=bool(rng.random() < BOARD_LABELS_CHANCE), **camera,
                    white_rgba=(*(float(v) for v in u(*WHITE_TINT_RANGE)), 1.0),
                    black_rgba=(*(float(u(*BLACK_TINT_RANGE)) for _ in range(3)), 1.0),

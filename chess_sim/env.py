@@ -24,7 +24,7 @@ from .config import (JOINTS, START_FEN, AppearanceConfig, Camera, EnvConfig, Fai
 from .controller import PickPlaceController, grasp_plan
 from .ik import So101Ik
 from .reach import MAX_IK_ERROR, MAX_TILT, ReachMap
-from .scene import (ARM_PREFIX, KEY_LIGHT_DIFFUSE, PieceSlot, arm_rest_pose, build_arm, build_scene,
+from .scene import (ARM_PREFIX, FILL_LIGHT_DIFFUSE, key_diffuse, PieceSlot, arm_rest_pose, build_arm, build_scene,
                     export_xml, piece_slots)
 from .tasks import AnyTask, CaptureTask, MoveTask, Task, TaskFamily
 
@@ -238,10 +238,14 @@ class ChessSimEnv:
         direction /= np.linalg.norm(direction)
         key.dir[:] = direction
         key.pos[:] = -2.4 * direction + [0, 0, 0.4]
-        key.diffuse[:] = KEY_LIGHT_DIFFUSE * appearance.light_intensity
+        key.diffuse[:] = key_diffuse(appearance)
+        key.ambient[:] = appearance.ambient
+        m.light_bulbradius[key.id] = appearance.shadow_softness
+        m.light("fill").diffuse[:] = FILL_LIGHT_DIFFUSE * appearance.fill_intensity
         self.config = self.config.model_copy(update={"appearance": self.config.appearance.model_copy(
             update={k: getattr(appearance, k) for k in
-                    ("white_rgba", "black_rgba", "table_rgb", "light_intensity", "light_dir")})})
+                    ("white_rgba", "black_rgba", "table_rgb", "light_intensity", "light_dir",
+                     "light_color", "fill_intensity", "ambient", "shadow_softness")})})
 
     def _move_board(self, origin) -> None:
         """Put the board's centre at `origin` (world x/y). Pieces are not moved;
