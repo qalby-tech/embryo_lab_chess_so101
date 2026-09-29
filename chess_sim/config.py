@@ -264,6 +264,11 @@ PUBLISHED_RIG_CHANCE = 0.33
 CAMERA_HEIGHT_RANGE = (0.35, 0.75)
 CAMERA_ANYWHERE_CHANCE = 0.6                 # else on the line from the mast to above the board
 CAMERA_OFFSET_MAX = 0.25                     # lens this far off the board centre, any direction
+SIDE_VIEW_CHANCE = 0.25                      # of the non-rig cameras: beside the board, not above it
+SIDE_VIEW_ELEVATION_DEG = (20.0, 50.0)       # above the table, looking across the board
+SIDE_VIEW_DISTANCE = (0.35, 0.60)            # lens to board centre
+SIDE_VIEW_ARM_SECTOR = 35.0                  # degrees either side of straight behind the arm
+ARM_HEADING = -np.pi / 2                     # the arm sits on the board's -y side
 CAMERA_FRAMED_HALF_WIDTH = 0.150             # half the strip that should fill the frame
 CAMERA_FOVY_SLACK = (0.93, 1.10)
 CAMERA_AIM = 0.012
@@ -326,7 +331,18 @@ class AppearanceConfig(Config):
         if rng.random() >= PUBLISHED_RIG_CHANCE:
             height = float(u(*CAMERA_HEIGHT_RANGE))
             offset = None
-            if rng.random() < CAMERA_ANYWHERE_CHANCE:
+            if rng.random() < SIDE_VIEW_CHANCE:
+                # a phone or webcam on a tripod beside the table, looking across the board;
+                # from anywhere but straight behind the arm, which would fill the frame
+                while True:
+                    heading = float(u(0, 2 * np.pi))
+                    if abs((heading - ARM_HEADING + np.pi) % (2 * np.pi) - np.pi) > np.radians(SIDE_VIEW_ARM_SECTOR):
+                        break
+                elevation, distance = np.radians(u(*SIDE_VIEW_ELEVATION_DEG)), float(u(*SIDE_VIEW_DISTANCE))
+                ground = distance * float(np.cos(elevation))
+                offset = (ground * float(np.cos(heading)), ground * float(np.sin(heading)))
+                height = distance * float(np.sin(elevation))
+            elif rng.random() < CAMERA_ANYWHERE_CHANCE:
                 radius, heading = CAMERA_OFFSET_MAX * float(np.sqrt(u(0, 1))), float(u(0, 2 * np.pi))
                 offset = (radius * float(np.cos(heading)), radius * float(np.sin(heading)))
             reach = float(np.hypot(height, np.hypot(*offset))) if offset else height

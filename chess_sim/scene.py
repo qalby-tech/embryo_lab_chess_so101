@@ -150,9 +150,22 @@ def _overhead_camera(board, appearance, mast_lens):
         x = (1 - t) * mast_lens[0] + t * cx
         y = (1 - t) * mast_lens[1] + t * cy
     target = (cx + appearance.camera_aim[0], cy + appearance.camera_aim[1], board.top)
+    pos = (x, y, board.top + appearance.camera_height)
+    view = np.subtract(target, pos)
+    view /= np.linalg.norm(view)
     roll = np.radians(appearance.camera_roll)
-    up = (float(np.sin(roll)), float(np.cos(roll)), 0.0)
-    return (x, y, board.top + appearance.camera_height), target, appearance.camera_fovy, up
+    if np.degrees(np.arcsin(-view[2])) > LOOKING_DOWN_DEG:
+        # looking down on the board: files run up the image, as on the published rig
+        up = (float(np.sin(roll)), float(np.cos(roll)), 0.0)
+    else:
+        # looking across the table: gravity is up, rolled about the line of sight
+        z = np.array([0.0, 0.0, 1.0])
+        up = z * np.cos(roll) + np.cross(view, z) * np.sin(roll) + view * np.dot(view, z) * (1 - np.cos(roll))
+        up = tuple(float(v) for v in up)
+    return pos, target, appearance.camera_fovy, up
+
+
+LOOKING_DOWN_DEG = 52.0    # steeper than this the image is oriented along the files, not by gravity
 
 
 MAST_SIDE = 0.16      # mast axis this far beside the arm axis (+x: the arm's right)
