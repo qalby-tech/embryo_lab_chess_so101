@@ -52,11 +52,46 @@ def import_piece(src: str, dst_dir: str) -> str | None:
     return None
 
 
+def problem(src: str) -> str | None:
+    """Why a generated piece cannot be used, without importing it."""
+    mesh = trimesh.load(src, force="mesh")
+    extent = mesh.bounds[1] - mesh.bounds[0]
+    if int(np.argmax(extent)) != 1:
+        return f"tallest axis is {'xyz'[int(np.argmax(extent))]}, not y"
+    width = max(extent[0], extent[2])
+    if width > MAX_WIDTH_PER_HEIGHT * extent[1]:
+        return f"{width / extent[1]:.2f} wide per unit height"
+    return None
+
+
+def audit(source: str) -> None:
+    """Move every malformed piece's output to <set>/rejected/ so a retry regenerates it."""
+    for name in sorted(os.listdir(source)):
+        for piece in PIECES:
+            src = os.path.join(source, name, "asset3d", piece, "result", "mesh", f"{piece}.obj")
+            if not os.path.isfile(src):
+                continue
+            why = problem(src)
+            if why:
+                target = os.path.join(source, name, "rejected", f"{piece}_{len(os.listdir(os.path.join(source, name)))}")
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                shutil.move(os.path.join(source, name, "asset3d", piece), target)
+                image = os.path.join(source, name, "images", f"{piece}.png")
+                if os.path.isfile(image):
+                    shutil.move(image, target + ".png")
+                print(f"{name}/{piece}: rejected - {why}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sets", nargs="*", default=None, help="default: every finished set")
     ap.add_argument("--source", default=SOURCE)
+    ap.add_argument("--audit-only", action="store_true",
+                    help="move malformed generated pieces aside (so a retry regenerates them) and stop")
     args = ap.parse_args()
+    if args.audit_only:
+        audit(args.source)
+        return
     sets = args.sets or sorted(os.listdir(args.source))
     imported = []
     for name in sets:
