@@ -257,6 +257,11 @@ AMBIENT_RANGE = (0.0, 0.25)
 SHADOW_SOFTNESS_RANGE = (0.02, 0.40)
 LIGHT_ELEVATION_RANGE = (40, 75)             # degrees above the table
 BOARD_LABELS_CHANCE = 0.5
+# board finishes: (reflectance of the surface, sliding friction pieces meet on it).
+# A magnetic board's pull is modelled as grip - pieces resist sliding off their square.
+BOARD_FINISHES = {"wood": (0.04, 1.0), "plastic": (0.12, 0.6), "vinyl": (0.02, 1.2),
+                  "magnetic": (0.20, 1.6), "cardboard": (0.02, 0.9)}
+BOARD_FINISH_WEIGHTS = (0.35, 0.2, 0.2, 0.15, 0.1)
 # overhead camera: a third of the episodes keep the published mast rig; the rest put
 # a camera anywhere from the mast to a boom arm over the board, 35-72 cm up (a C920
 # on a desk arm frames the board from ~37 cm), aimed within 12 mm of the centre
@@ -285,6 +290,7 @@ class AppearanceConfig(Config):
     piece_scale: float = Field(1.0, ge=PIECE_SCALE_LIMITS[0], le=PIECE_SCALE_LIMITS[1])
     piece_set: str = "default"            # see chess_sim.assets.available_piece_sets()
     board_labels: bool = False            # a-h and 1-8 printed on the border
+    board_finish: str = "wood"            # one of BOARD_FINISHES: how the board looks and grips
     # The overhead camera. None keeps the published rig: the lens on the mast beside
     # the arm, 678 mm above the board, 24 degrees. Otherwise the lens sits `camera_height`
     # above the board, `camera_over_board` of the way from the mast to straight above
@@ -362,6 +368,7 @@ class AppearanceConfig(Config):
                    backdrop_tint=tuple(float(v) for v in u(*BACKDROP_TINT_RANGE, 3)),
                    backdrop_brightness=float(u(*BACKDROP_BRIGHTNESS_RANGE)),
                    board_labels=bool(rng.random() < BOARD_LABELS_CHANCE), **camera,
+                   board_finish=str(rng.choice(list(BOARD_FINISHES), p=list(BOARD_FINISH_WEIGHTS))),
                    white_rgba=(*(float(v) for v in u(*WHITE_TINT_RANGE)), 1.0),
                    black_rgba=(*(float(u(*BLACK_TINT_RANGE)) for _ in range(3)), 1.0),
                    light_square=light, dark_square=dark,
@@ -377,7 +384,8 @@ class AppearanceConfig(Config):
         """Identifies the board texture (its colors and labels) for caching."""
         key = "-".join(f"{c:02x}" for rgb in (self.light_square, self.dark_square, self.border)
                        for c in rgb)
-        return key + ("-labels" if self.board_labels else "")
+        return (key + ("-labels" if self.board_labels else "")
+                + ("" if self.board_finish == "wood" else f"-{self.board_finish}"))
 
 
 class ControlConfig(Config):

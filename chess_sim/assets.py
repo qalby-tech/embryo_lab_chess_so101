@@ -245,16 +245,19 @@ def ensure_scene_assets(board, appearance=None) -> str:
         colors = (appearance.light_square, appearance.dark_square, appearance.border)
     if not os.path.exists(path):
         _write_board_texture(path, board, colors,
-                             labels=bool(appearance is not None and appearance.board_labels))
+                             labels=bool(appearance is not None and appearance.board_labels),
+                             finish=appearance.board_finish if appearance is not None else "wood")
     return os.path.relpath(path, ASSET_DIR)
 
 
+BOARD_FINISH_SPECKLE = {"plastic": 2.0, "vinyl": 5.0, "magnetic": 1.5, "cardboard": 4.0}
+FOLDING_FINISHES = ("magnetic", "cardboard")
 _DEFAULT_BOARD_COLORS = ((214, 178, 132), (99, 64, 40), (92, 58, 32))
 _DEFAULT_BOARD_KEY = "-".join(f"{c:02x}" for rgb in _DEFAULT_BOARD_COLORS for c in rgb)
 
 
 def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128,
-                         labels: bool = False) -> None:
+                         labels: bool = False, finish: str = "wood") -> None:
     from PIL import Image, ImageDraw, ImageFont
 
     light, dark, border = colors or _DEFAULT_BOARD_COLORS
@@ -264,6 +267,9 @@ def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128
     img = np.zeros((size, size, 3), np.float32)
 
     def wood(shape, base, variation=14.0):
+        if finish != "wood":
+            # printed or moulded: flat colour with a finish-dependent speckle, no grain
+            return np.clip(base + rng.normal(0, BOARD_FINISH_SPECKLE[finish], shape), 0, 255)
         grain = np.cumsum(rng.normal(0, 1, shape), axis=1)
         grain = (grain - grain.min()) / (np.ptp(grain) + 1e-6) - 0.5
         rows = rng.normal(0, 1, (shape[0], 1)) * 0.35
@@ -278,6 +284,10 @@ def _write_board_texture(path: str, board, colors=None, px_per_square: int = 128
             for c in range(3):
                 img[y0:y0 + px_per_square, x0:x0 + px_per_square, c] = wood(
                     (px_per_square, px_per_square), rgb[c])
+    if finish in FOLDING_FINISHES:
+        # a folding board's hinge: a thin darker line across the middle, between ranks 4 and 5
+        mid, half = size // 2, max(1, px_per_square // 64)
+        img[mid - half:mid + half + 1, :, :] *= 0.55
     image = Image.fromarray(img.astype(np.uint8))
     if labels and border_px >= 24:
         # files along the near and far borders, ranks along the sides, as printed boards

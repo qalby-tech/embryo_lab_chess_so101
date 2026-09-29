@@ -17,7 +17,7 @@ import numpy as np
 from . import assets, gripper
 from .assets import (ASSET_DIR, DEFAULT_SET, SET_COUNTS, PieceGeometry, piece_asset_name,
                      piece_geometry, piece_obj_path, piece_texture_path, piece_tint)
-from .config import AppearanceConfig, BoardConfig, Camera, Config, JointPose
+from .config import BOARD_FINISHES, AppearanceConfig, BoardConfig, Camera, Config, JointPose
 
 ARM_PREFIX = "so101:"
 # MuJoCo caps offscreen rendering at these; the default 640x480 is too small for a
@@ -121,7 +121,7 @@ def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig
     spec.visual.map.znear = 0.004
 
     _add_environment(spec, board, appearance)
-    _add_board(spec, board, board_texture)
+    _add_board(spec, board, board_texture, appearance)
     _add_pieces(spec, board, appearance)
     _add_arm(spec, board)
     camera_pos = _add_camera_mast(spec, board)
@@ -239,9 +239,10 @@ def _add_environment(spec, board, appearance):
                                 rgba=[0.25, 0.25, 0.28, 1])
 
 
-def _add_board(spec, board, texture_file):
+def _add_board(spec, board, texture_file, appearance):
     spec.add_texture(name="board_tex", type=mujoco.mjtTexture.mjTEXTURE_2D, file=texture_file)
-    mat = spec.add_material(name="board_mat", reflectance=0.04)
+    reflectance, grip = BOARD_FINISHES[appearance.board_finish]
+    mat = spec.add_material(name="board_mat", reflectance=reflectance)
     mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "board_tex"
     # A mocap body, not a world geom, so the board can be shifted between
     # episodes. A static world geom's collision bounds are fixed at compile
@@ -253,7 +254,7 @@ def _add_board(spec, board, texture_file):
                                    quat=[float(np.cos(board.yaw / 2)), 0.0, 0.0, float(np.sin(board.yaw / 2))])
     body.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
                   size=[board.width / 2, board.width / 2, board.thickness / 2],
-                  material="board_mat",
+                  material="board_mat", friction=[grip, 0.005, 0.0001],
                   solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
 
 
