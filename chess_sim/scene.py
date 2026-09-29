@@ -143,9 +143,12 @@ def _overhead_camera(board, appearance, mast_lens):
     cx, cy = board.origin
     if appearance.camera_height is None:
         return mast_lens, (cx, cy, board.top), 24.0, (0.0, 1.0, 0.0)
-    t = appearance.camera_over_board
-    x = (1 - t) * mast_lens[0] + t * cx
-    y = (1 - t) * mast_lens[1] + t * cy
+    if appearance.camera_offset is not None:
+        x, y = cx + appearance.camera_offset[0], cy + appearance.camera_offset[1]
+    else:
+        t = appearance.camera_over_board
+        x = (1 - t) * mast_lens[0] + t * cx
+        y = (1 - t) * mast_lens[1] + t * cy
     target = (cx + appearance.camera_aim[0], cy + appearance.camera_aim[1], board.top)
     roll = np.radians(appearance.camera_roll)
     up = (float(np.sin(roll)), float(np.cos(roll)), 0.0)
@@ -233,7 +236,8 @@ def _add_board(spec, board, texture_file):
     # the spot it now covered.
     body = spec.worldbody.add_body(name="board", mocap=True,
                                    pos=[board.origin[0], board.origin[1],
-                                        board.table_top + board.thickness / 2])
+                                        board.table_top + board.thickness / 2],
+                                   quat=[float(np.cos(board.yaw / 2)), 0.0, 0.0, float(np.sin(board.yaw / 2))])
     body.add_geom(name="board", type=mujoco.mjtGeom.mjGEOM_BOX,
                   size=[board.width / 2, board.width / 2, board.thickness / 2],
                   material="board_mat",

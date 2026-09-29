@@ -122,6 +122,7 @@ class BoardConfig(Config):
     # where the board's centre sits on the table; the arm, camera mast, tray and
     # parked pieces do not move with it
     origin: tuple[float, float] = (0.0, 0.0)
+    yaw: float = 0.0                # radians: the board turned about its centre, as a person sets it down
 
     # Discard tray: the camera mast stands at x = +0.16 and unused pieces park
     # beyond x = +0.187, so the tray goes to the arm's left where nothing else is.
@@ -158,12 +159,21 @@ class BoardConfig(Config):
         """World x/y of a square, as a `Square`, a name or an index (0 = a1 ... 63 = h8)."""
         square = square_index(square)
         f, r = chess.square_file(square), chess.square_rank(square)
-        return self.origin[0] + (f - 3.5) * self.square, self.origin[1] + (r - 3.5) * self.square
+        dx, dy = (f - 3.5) * self.square, (r - 3.5) * self.square
+        c, s = np.cos(self.yaw), np.sin(self.yaw)
+        return self.origin[0] + c * dx - s * dy, self.origin[1] + s * dx + c * dy
+
+    @property
+    def half_extent(self) -> float:
+        """Half the board's footprint along x once turned - how far it reaches sideways."""
+        return self.width / 2 * (abs(np.cos(self.yaw)) + abs(np.sin(self.yaw)))
 
     def on_field(self, xy) -> bool:
         """Whether a world x/y lies over the 8x8 playing field."""
         half = self.field / 2
-        return abs(xy[0] - self.origin[0]) <= half and abs(xy[1] - self.origin[1]) <= half
+        dx, dy = xy[0] - self.origin[0], xy[1] - self.origin[1]
+        c, s = np.cos(self.yaw), np.sin(self.yaw)
+        return abs(c * dx + s * dy) <= half and abs(-s * dx + c * dy) <= half
 
     @classmethod
     def sample(cls, rng: np.random.Generator) -> "BoardConfig":
@@ -176,10 +186,18 @@ class BoardConfig(Config):
             return cls()
         u = rng.uniform
         square, border = float(u(*BOARD_SQUARE_RANGE)), float(u(*BOARD_BORDER_RANGE))
-        width = 8 * square + 2 * border
-        return cls(square=square, border=border, thickness=float(u(*BOARD_THICKNESS_RANGE)),
-                   arm_gap=float(u(*BOARD_ARM_GAP_RANGE)),
-                   tray_x=-(width / 2 + float(u(*TRAY_MARGIN_RANGE))))
+        yaw = float(np.radians(u(-BOARD_YAW_DEG, BOARD_YAW_DEG)))
+        side = float(u(-BOARD_SIDEWAYS, BOARD_SIDEWAYS))
+        riser = 0.0 if rng.random() < ARM_ON_TABLE_CHANCE else float(u(*ARM_RISER_RANGE))
+        thickness = float(u(*BOARD_THICKNESS_RANGE))
+        # a board top more than ~12 mm above the arm's base puts the board edge in the
+        # forearm's path on the near ranks: a thick board needs the arm raised
+        riser = max(riser, thickness - MAX_BOARD_ABOVE_ARM)
+        board = cls(square=square, border=border, thickness=thickness,
+                    arm_gap=float(u(*BOARD_ARM_GAP_RANGE)), arm_riser=riser,
+                    origin=(side, 0.0), yaw=yaw)
+        return board.model_copy(update={
+            "tray_x": side - (board.half_extent + float(u(*TRAY_MARGIN_RANGE)))})
 
     @property
     def calibrated(self) -> bool:
@@ -198,7 +216,7 @@ class BoardConfig(Config):
     def graveyard_slot(self, index: int) -> tuple[float, float]:
         """Off-board parking spot for pieces absent from the position."""
         row, col = divmod(index, self.graveyard_columns)
-        return (self.width / 2 + self.graveyard_gap + col * self.graveyard_pitch,
+        return (self.origin[0] + self.half_extent + self.graveyard_gap + col * self.graveyard_pitch,
                 -self.field / 2 + row * self.graveyard_pitch)
 
 
@@ -207,7 +225,12 @@ PUBLISHED_BOARD_CHANCE = 0.25
 BOARD_SQUARE_RANGE = (0.025, 0.031)
 BOARD_BORDER_RANGE = (0.006, 0.025)
 BOARD_THICKNESS_RANGE = (0.003, 0.020)       # a vinyl roll-up to a thick wooden board
-BOARD_ARM_GAP_RANGE = (0.065, 0.100)
+BOARD_ARM_GAP_RANGE = (0.050, 0.110)
+BOARD_YAW_DEG = 12.0                         # set down a little turned
+BOARD_SIDEWAYS = 0.04                        # the arm clamped off the board's centre line
+ARM_ON_TABLE_CHANCE = 0.4                    # clamped straight to the table, no riser
+ARM_RISER_RANGE = (0.02, 0.06)
+MAX_BOARD_ABOVE_ARM = 0.012                  # measured: 17 mm misses by a square, 12 mm is clean
 TRAY_MARGIN_RANGE = (0.025, 0.045)           # tray beside the board's left edge
 
 # Plausible looks for domain randomization: wood or painted boards, ivory-to-cream
@@ -238,11 +261,13 @@ BOARD_LABELS_CHANCE = 0.5
 # a camera anywhere from the mast to a boom arm over the board, 35-72 cm up (a C920
 # on a desk arm frames the board from ~37 cm), aimed within 12 mm of the centre
 PUBLISHED_RIG_CHANCE = 0.33
-CAMERA_HEIGHT_RANGE = (0.35, 0.72)
+CAMERA_HEIGHT_RANGE = (0.35, 0.75)
+CAMERA_ANYWHERE_CHANCE = 0.6                 # else on the line from the mast to above the board
+CAMERA_OFFSET_MAX = 0.25                     # lens this far off the board centre, any direction
 CAMERA_FRAMED_HALF_WIDTH = 0.150             # half the strip that should fill the frame
 CAMERA_FOVY_SLACK = (0.93, 1.10)
 CAMERA_AIM = 0.012
-CAMERA_ROLL = 5.0
+CAMERA_ROLL = 8.0
 
 
 class AppearanceConfig(Config):
@@ -264,6 +289,9 @@ class AppearanceConfig(Config):
     camera_over_board: float = 0.0
     camera_aim: tuple[float, float] = (0.0, 0.0)
     camera_roll: float = 0.0              # degrees about the view axis
+    # a boom-arm camera anywhere above the table: offset of the lens from the board
+    # centre (x, y); overrides camera_over_board when set
+    camera_offset: tuple[float, float] | None = None
     white_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)  # tint over the texture
     black_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
     light_square: tuple[int, int, int] = (214, 178, 132)   # board colors, 0-255
@@ -297,9 +325,14 @@ class AppearanceConfig(Config):
         camera = {}
         if rng.random() >= PUBLISHED_RIG_CHANCE:
             height = float(u(*CAMERA_HEIGHT_RANGE))
-            # frame the board whatever the height, the way a person sets a camera up
-            framed = float(np.degrees(2 * np.arctan(CAMERA_FRAMED_HALF_WIDTH / height)))
-            camera = dict(camera_height=height,
+            offset = None
+            if rng.random() < CAMERA_ANYWHERE_CHANCE:
+                radius, heading = CAMERA_OFFSET_MAX * float(np.sqrt(u(0, 1))), float(u(0, 2 * np.pi))
+                offset = (radius * float(np.cos(heading)), radius * float(np.sin(heading)))
+            reach = float(np.hypot(height, np.hypot(*offset))) if offset else height
+            # frame the board whatever the distance, the way a person sets a camera up
+            framed = float(np.degrees(2 * np.arctan(CAMERA_FRAMED_HALF_WIDTH / reach)))
+            camera = dict(camera_height=height, camera_offset=offset,
                           camera_fovy=framed * float(u(*CAMERA_FOVY_SLACK)),
                           camera_over_board=float(u(0.0, 1.0)),
                           camera_aim=tuple(float(v) for v in u(-CAMERA_AIM, CAMERA_AIM, 2)),
