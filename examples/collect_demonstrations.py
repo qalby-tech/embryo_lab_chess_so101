@@ -80,11 +80,12 @@ def main():
                     help="control steps each perturbation lasts")
     ap.add_argument("--out", default="datasets/chess")
     ap.add_argument("--piece-sets", nargs="*", default=["default"],
-                    help="piece sets to draw from, one per chunk; 'all' for every imported set "
+                    help="piece sets to draw from, one per chunk; 'all' for every set the expert passed "
                          "(see chess_sim.assets.available_piece_sets)")
     args = ap.parse_args()
     noise = ActionNoiseConfig(joint_std=args.noise, hold=args.noise_hold)
-    piece_sets = tuple(available_piece_sets() if args.piece_sets == ["all"] else args.piece_sets)
+    piece_sets = tuple(available_piece_sets(verified_only=True) if args.piece_sets == ["all"]
+                       else args.piece_sets)
     unknown = set(piece_sets) - set(available_piece_sets())
     if unknown:
         raise SystemExit(f"unknown piece sets {sorted(unknown)}; have {available_piece_sets()}")

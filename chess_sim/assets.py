@@ -42,6 +42,7 @@ SET_COUNTS = {chess.PAWN: 8, chess.ROOK: 2, chess.KNIGHT: 2,
 DEFAULT_SET = "default"
 PIECE_SETS_DIR = os.path.join(ASSET_DIR, "piece_sets")
 DARK_SIDE = 0.22          # how far a single-colour set's black pieces are darkened
+VERIFIED_FILE = "verified.json"   # tools/check_piece_sets.py: which sets the expert handles
 
 
 def piece_asset_name(piece: chess.Piece) -> str:
@@ -50,11 +51,20 @@ def piece_asset_name(piece: chess.Piece) -> str:
     return f"{color}_{_TYPE_NAME[piece.piece_type]}"
 
 
-def available_piece_sets() -> list[str]:
-    """Every set the scene can build: the vendored one first, then the imported ones."""
+def available_piece_sets(verified_only: bool = False) -> list[str]:
+    """Every set the scene can build: the vendored one first, then the imported ones.
+    `verified_only` keeps the imported sets the scripted expert passed on."""
     imported = sorted(d for d in os.listdir(PIECE_SETS_DIR)
                       if os.path.isfile(os.path.join(PIECE_SETS_DIR, d, "king", "king.obj"))) \
         if os.path.isdir(PIECE_SETS_DIR) else []
+    if verified_only:
+        path = os.path.join(PIECE_SETS_DIR, VERIFIED_FILE)
+        verdicts = {}
+        if os.path.isfile(path):
+            import json
+            with open(path) as f:
+                verdicts = json.load(f)
+        imported = [name for name in imported if verdicts.get(name, {}).get("passed")]
     return [DEFAULT_SET, *imported]
 
 
