@@ -189,7 +189,8 @@ def _add_environment(spec, board, appearance):
     spec.add_mesh(name="backdrop", file="scene/pano_cylinder.obj")
     spec.add_texture(name="backdrop_tex", type=mujoco.mjtTexture.mjTEXTURE_2D,
                      file="scene/pano_image.png")
-    mat = spec.add_material(name="backdrop_mat", emission=0.55)
+    mat = spec.add_material(name="backdrop_mat", emission=appearance.backdrop_brightness,
+                            rgba=[*appearance.backdrop_tint, 1.0])
     mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "backdrop_tex"
     spec.worldbody.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="backdrop",
                             material="backdrop_mat", contype=0, conaffinity=0, group=1)
@@ -202,8 +203,16 @@ def _add_environment(spec, board, appearance):
     spec.worldbody.add_light(name="fill", pos=[-1.2, 1.0, 1.8], dir=[0.5, -0.4, -1],
                              diffuse=list(FILL_LIGHT_DIFFUSE * appearance.fill_intensity), castshadow=False)
     # table and arm pedestal
+    table_material = ""
+    if appearance.table_surface != "plain":
+        spec.add_texture(name="table_tex", type=mujoco.mjtTexture.mjTEXTURE_2D,
+                         file=assets.ensure_table_texture(appearance.table_surface))
+        tmat = spec.add_material(name="table_mat", rgba=[*appearance.table_rgb, 1],
+                                 texuniform=True, texrepeat=[3, 3])
+        tmat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = "table_tex"
+        table_material = "table_mat"
     spec.worldbody.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX,
-                            size=[0.36, 0.30, board.table_top / 2],
+                            size=[0.36, 0.30, board.table_top / 2], material=table_material,
                             pos=[0, 0, board.table_top / 2], rgba=[*appearance.table_rgb, 1],
                             solimp=list(SURFACE_SOLIMP), priority=SURFACE_PRIORITY)
     ax, ay, az = board.arm_base

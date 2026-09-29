@@ -223,6 +223,9 @@ PAINTED_HUE_BOOST = 70
 WHITE_TINT_RANGE = ((0.8, 0.75, 0.6), (1.0, 1.0, 1.0))
 BLACK_TINT_RANGE = (0.5, 1.0)
 TABLE_RGB_RANGE = ((0.2, 0.15, 0.1), (0.75, 0.65, 0.55))
+TABLE_SURFACES = ("plain", "wood", "cloth", "marble", "laminate")
+BACKDROP_TINT_RANGE = (0.7, 1.0)
+BACKDROP_BRIGHTNESS_RANGE = (0.3, 0.8)
 LIGHT_INTENSITY_RANGE = (0.45, 1.6)
 WARM_LIGHT = (1.0, 0.80, 0.60)               # a tungsten lamp
 COOL_LIGHT = (0.86, 0.93, 1.06)              # overcast daylight from a window
@@ -273,6 +276,9 @@ class AppearanceConfig(Config):
     fill_intensity: float = 1.0                                  # the soft light from the room
     ambient: float = 0.0                                         # light from everywhere, flattens shadows
     shadow_softness: float = 0.02                                # key light's radius, metres: hard to soft shadows
+    table_surface: str = "plain"                                 # one of TABLE_SURFACES; `table_rgb` tints it
+    backdrop_tint: tuple[float, float, float] = (1.0, 1.0, 1.0)  # the room behind the table
+    backdrop_brightness: float = 0.55
 
     @classmethod
     def sample(cls, rng: np.random.Generator,
@@ -303,6 +309,9 @@ class AppearanceConfig(Config):
         return cls(piece_scale=float(u(*piece_scale_range)), piece_set=piece_set,
                    light_color=light_color, fill_intensity=float(u(*FILL_INTENSITY_RANGE)),
                    ambient=float(u(*AMBIENT_RANGE)), shadow_softness=float(u(*SHADOW_SOFTNESS_RANGE)),
+                   table_surface=str(TABLE_SURFACES[int(rng.integers(len(TABLE_SURFACES)))]),
+                   backdrop_tint=tuple(float(v) for v in u(*BACKDROP_TINT_RANGE, 3)),
+                   backdrop_brightness=float(u(*BACKDROP_BRIGHTNESS_RANGE)),
                    board_labels=bool(rng.random() < BOARD_LABELS_CHANCE), **camera,
                    white_rgba=(*(float(v) for v in u(*WHITE_TINT_RANGE)), 1.0),
                    black_rgba=(*(float(u(*BLACK_TINT_RANGE)) for _ in range(3)), 1.0),

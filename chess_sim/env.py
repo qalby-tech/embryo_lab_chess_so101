@@ -233,6 +233,11 @@ class ChessSimEnv:
             mat.rgba[:] = piece_tint(slot.piece, appearance.white_rgba, appearance.black_rgba,
                                      self.config.appearance.piece_set)
         m.geom("table").rgba[:] = [*appearance.table_rgb, 1.0]
+        if self.config.appearance.table_surface != "plain":     # a textured table is tinted by its material
+            m.material("table_mat").rgba[:] = [*appearance.table_rgb, 1.0]
+        backdrop = m.material("backdrop_mat")
+        backdrop.rgba[:] = [*appearance.backdrop_tint, 1.0]
+        backdrop.emission = appearance.backdrop_brightness
         key = m.light("key")
         direction = np.asarray(appearance.light_dir, dtype=float)
         direction /= np.linalg.norm(direction)
@@ -245,7 +250,8 @@ class ChessSimEnv:
         self.config = self.config.model_copy(update={"appearance": self.config.appearance.model_copy(
             update={k: getattr(appearance, k) for k in
                     ("white_rgba", "black_rgba", "table_rgb", "light_intensity", "light_dir",
-                     "light_color", "fill_intensity", "ambient", "shadow_softness")})})
+                     "light_color", "fill_intensity", "ambient", "shadow_softness",
+                     "backdrop_tint", "backdrop_brightness")})})
 
     def _move_board(self, origin) -> None:
         """Put the board's centre at `origin` (world x/y). Pieces are not moved;

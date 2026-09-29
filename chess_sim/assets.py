@@ -316,3 +316,32 @@ def _write_backdrop(obj_path: str, image_path: str,
     mesh.visual = trimesh.visual.TextureVisuals(uv=np.array(uv),
                                                 image=Image.open(image_path).convert("RGB"))
     mesh.export(obj_path)
+
+
+def ensure_table_texture(kind: str) -> str:
+    """A light, mostly grey surface texture the table colour tints: wood grain,
+    woven cloth, veined marble or speckled laminate. Written once; returns the
+    path relative to the asset dir."""
+    os.makedirs(GENERATED_DIR, exist_ok=True)
+    path = os.path.join(GENERATED_DIR, f"table_{kind}.png")
+    if not os.path.exists(path):
+        from PIL import Image
+        rng = np.random.default_rng(7)
+        n = 512
+        y, x = np.mgrid[0:n, 0:n] / n
+        if kind == "wood":
+            # long streaks across the plank, gently wandering, with fine fibre noise
+            streaks = np.sin(y * 140 + 5 * np.sin(x * 3.1) + 2 * np.sin(x * 11 + y * 4))
+            fibre = np.repeat(rng.normal(0, 1, (n, 1)), n, axis=1) * 0.04
+            img = 0.8 + 0.06 * streaks + fibre + rng.normal(0, 0.02, (n, n))
+        elif kind == "cloth":
+            weave = 0.5 * (np.sin(x * n * 0.9) + np.sin(y * n * 0.9))
+            img = 0.8 + 0.05 * weave + rng.normal(0, 0.05, (n, n))
+        elif kind == "marble":
+            veins = np.abs(np.sin((x + y) * 7 + 3 * np.sin(x * 5) * np.cos(y * 4)))
+            img = 0.92 - 0.35 * np.exp(-veins * 18) + rng.normal(0, 0.015, (n, n))
+        else:                                   # laminate
+            img = 0.86 + rng.normal(0, 0.025, (n, n)) + 0.03 * (rng.random((n, n)) > 0.995)
+        rgb = np.clip(np.stack([img] * 3, axis=-1), 0, 1)
+        Image.fromarray((rgb * 255).astype(np.uint8)).save(path)
+    return os.path.relpath(path, ASSET_DIR)
