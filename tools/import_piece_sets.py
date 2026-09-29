@@ -27,6 +27,10 @@ Y_UP_TO_Z_UP = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
 # a piece far wider than tall is a failed generation (a board, a plate, a figurine
 # lying down); Staunton pieces run 0.35-0.6 wide per unit height
 MAX_WIDTH_PER_HEIGHT = 0.8
+# the image model turns a rook into a slim king unless told otherwise; a Staunton
+# rook stands about 1.4 times its width (the vendored one 1.41); the king-shaped rooks
+# it draws measure 1.8, generated kings 2.0-2.3
+MAX_HEIGHT_PER_WIDTH = {"rook": 1.65}
 
 
 def import_piece(src: str, dst_dir: str) -> str | None:
@@ -61,6 +65,9 @@ def problem(src: str) -> str | None:
     width = max(extent[0], extent[2])
     if width > MAX_WIDTH_PER_HEIGHT * extent[1]:
         return f"{width / extent[1]:.2f} wide per unit height"
+    piece = os.path.splitext(os.path.basename(src))[0]
+    if piece in MAX_HEIGHT_PER_WIDTH and extent[1] > MAX_HEIGHT_PER_WIDTH[piece] * width:
+        return f"{extent[1] / width:.2f} tall per unit width, too slim for a {piece}"
     return None
 
 
