@@ -13,13 +13,14 @@ set that fails is skipped with the reason.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 
 import numpy as np
 import trimesh
 
-from chess_sim.assets import PIECE_SETS_DIR
+from chess_sim.assets import ASSET_DIR, PIECE_SETS_DIR
 
 SOURCE = os.path.expanduser("~/EmbodiedGen/outputs/piece_sets")
 PIECES = ("pawn", "rook", "knight", "bishop", "queen", "king")
@@ -93,6 +94,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sets", nargs="*", default=None, help="default: every finished set")
     ap.add_argument("--source", default=SOURCE)
+    ap.add_argument("--max-fallbacks", type=int, default=1,
+                    help="pieces a set may borrow from the vendored set before it is left out")
     ap.add_argument("--audit-only", action="store_true",
                     help="move malformed generated pieces aside (so a retry regenerates them) and stop")
     args = ap.parse_args()
@@ -104,20 +107,32 @@ def main():
     for name in sets:
         mesh_dir = os.path.join(args.source, name, "asset3d")
         sources = {p: os.path.join(mesh_dir, p, "result", "mesh", f"{p}.obj") for p in PIECES}
-        missing = [p for p, f in sources.items() if not os.path.isfile(f)]
-        if missing:
+        missing = [p for p, f in sources.items() if not os.path.isfile(f) or problem(f)]
+        if len(missing) > args.max_fallbacks:
             print(f"{name}: not finished (missing {', '.join(missing)})")
             continue
         target = os.path.join(PIECE_SETS_DIR, name)
         shutil.rmtree(target, ignore_errors=True)
         problems = {p: why for p, f in sources.items()
-                    if (why := import_piece(f, os.path.join(target, p)))}
+                    if p not in missing and (why := import_piece(f, os.path.join(target, p)))}
+        for p in missing:
+            # the image model rarely draws a rook; after the retries a set borrows the
+            # vendored shape for what it could not generate, so no set is left unusable
+            vendored = os.path.join(ASSET_DIR, "pieces", f"white_{p}")
+            os.makedirs(os.path.join(target, p), exist_ok=True)
+            shutil.copyfile(os.path.join(vendored, f"white_{p}.obj"), os.path.join(target, p, f"{p}.obj"))
+            for extra in ("material_0.png", "material.mtl"):
+                if os.path.isfile(os.path.join(vendored, extra)):
+                    shutil.copyfile(os.path.join(vendored, extra), os.path.join(target, p, extra))
+        if missing:
+            with open(os.path.join(target, "fallbacks.json"), "w") as f:
+                json.dump(missing, f)
         if problems:
             shutil.rmtree(target, ignore_errors=True)
             print(f"{name}: skipped - " + "; ".join(f"{p}: {why}" for p, why in problems.items()))
             continue
         imported.append(name)
-        print(f"{name}: imported")
+        print(f"{name}: imported" + (f" (vendored {', '.join(missing)})" if missing else ""))
     print(f"\n{len(imported)} sets in {PIECE_SETS_DIR}")
 
 
