@@ -15,7 +15,8 @@ import mujoco
 import numpy as np
 
 from . import assets, gripper
-from .assets import SET_COUNTS, PieceGeometry, piece_asset_name, piece_geometry
+from .assets import (ASSET_DIR, DEFAULT_SET, SET_COUNTS, PieceGeometry, piece_asset_name,
+                     piece_geometry, piece_obj_path, piece_texture_path, piece_tint)
 from .config import AppearanceConfig, BoardConfig, Camera, Config, JointPose
 
 ARM_PREFIX = "so101:"
@@ -61,7 +62,8 @@ SURFACE_SOLIMP = (0.999, 0.9999, 0.001, 0.5, 2.0)
 SURFACE_PRIORITY = 1
 
 
-def piece_slots(board: BoardConfig, piece_scale: float = 1.0) -> list[PieceSlot]:
+def piece_slots(board: BoardConfig, piece_scale: float = 1.0,
+                piece_set: str = DEFAULT_SET) -> list[PieceSlot]:
     """The fixed set of piece bodies, in a stable order."""
     slots = []
     for color in (chess.WHITE, chess.BLACK):
@@ -71,7 +73,7 @@ def piece_slots(board: BoardConfig, piece_scale: float = 1.0) -> list[PieceSlot]
                 slots.append(PieceSlot(
                     body=f"{piece_asset_name(piece)}{i}",
                     piece=piece,
-                    geometry=piece_geometry(piece, board.square, piece_scale),
+                    geometry=piece_geometry(piece, board.square, piece_scale, piece_set),
                 ))
     return slots
 
@@ -209,15 +211,16 @@ def _add_board(spec, board, texture_file):
 
 def _add_pieces(spec, board, appearance):
     kinds_done = set()
-    for i, slot in enumerate(piece_slots(board, appearance.piece_scale)):
+    piece_set = appearance.piece_set
+    for i, slot in enumerate(piece_slots(board, appearance.piece_scale, piece_set)):
         kind = piece_asset_name(slot.piece)
         g = slot.geometry
         if kind not in kinds_done:
-            spec.add_mesh(name=f"mesh_{kind}", file=f"pieces/{kind}/{kind}.obj",
-                          scale=[g.scale] * 3)
+            spec.add_mesh(name=f"mesh_{kind}", scale=[g.scale] * 3,
+                          file=os.path.relpath(piece_obj_path(slot.piece, piece_set), ASSET_DIR))
             spec.add_texture(name=f"tex_{kind}", type=mujoco.mjtTexture.mjTEXTURE_2D,
-                             file=f"pieces/{kind}/material_0.png")
-            tint = appearance.white_rgba if slot.piece.color == chess.WHITE else appearance.black_rgba
+                             file=os.path.relpath(piece_texture_path(slot.piece, piece_set), ASSET_DIR))
+            tint = piece_tint(slot.piece, appearance.white_rgba, appearance.black_rgba, piece_set)
             mat = spec.add_material(name=f"mat_{kind}", reflectance=0.2, rgba=list(tint))
             mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB.value] = f"tex_{kind}"
             kinds_done.add(kind)

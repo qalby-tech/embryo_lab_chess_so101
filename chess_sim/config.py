@@ -13,6 +13,8 @@ was produced with - so `EnvConfig()` reproduces the published setup.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from enum import StrEnum
 
 import chess
@@ -204,6 +206,7 @@ class AppearanceConfig(Config):
     """
 
     piece_scale: float = Field(1.0, ge=PIECE_SCALE_LIMITS[0], le=PIECE_SCALE_LIMITS[1])
+    piece_set: str = "default"            # see chess_sim.assets.available_piece_sets()
     white_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)  # tint over the texture
     black_rgba: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0)
     light_square: tuple[int, int, int] = (214, 178, 132)   # board colors, 0-255
@@ -215,9 +218,11 @@ class AppearanceConfig(Config):
 
     @classmethod
     def sample(cls, rng: np.random.Generator,
-               piece_scale_range: tuple[float, float] = PIECE_SCALE_SAMPLED) -> "AppearanceConfig":
-        """A random look drawn from the ranges above."""
+               piece_scale_range: tuple[float, float] = PIECE_SCALE_SAMPLED,
+               piece_sets: Sequence[str] = ("default",)) -> "AppearanceConfig":
+        """A random look drawn from the ranges above, the piece set among `piece_sets`."""
         u = rng.uniform
+        piece_set = str(piece_sets[int(rng.integers(len(piece_sets)))])
         light = tuple(int(v) for v in u(*LIGHT_SQUARE_RANGE))
         dark = tuple(int(v) for v in u(*DARK_SQUARE_RANGE))
         if rng.random() < PAINTED_BOARD_CHANCE:
@@ -225,7 +230,7 @@ class AppearanceConfig(Config):
             dark = tuple(int(u(*PAINTED_BASE_RANGE) + (PAINTED_HUE_BOOST if hue == c else 0))
                          for c in range(3))
         azimuth, elevation = u(0, 2 * np.pi), np.radians(u(*LIGHT_ELEVATION_RANGE))
-        return cls(piece_scale=float(u(*piece_scale_range)),
+        return cls(piece_scale=float(u(*piece_scale_range)), piece_set=piece_set,
                    white_rgba=(*(float(v) for v in u(*WHITE_TINT_RANGE)), 1.0),
                    black_rgba=(*(float(u(*BLACK_TINT_RANGE)) for _ in range(3)), 1.0),
                    light_square=light, dark_square=dark,

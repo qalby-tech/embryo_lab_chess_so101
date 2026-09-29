@@ -1,0 +1,83 @@
+"""Bring EmbodiedGen-generated chess sets into the scene's asset tree.
+
+    python tools/import_piece_sets.py                         # every finished set
+    python tools/import_piece_sets.py --sets staunton_maple marble
+
+Reads ~/EmbodiedGen/outputs/piece_sets/<set>/asset3d/<piece>/result/mesh/<piece>.obj
+(y-up, metres, one texture) and writes chess_sim/assets/piece_sets/<set>/<piece>/
+<piece>.obj + material_0.png, z-up like the vendored set, base at z = 0 and axis on
+the origin. Scale does not matter - the scene rescales every piece to the board -
+but proportions do, so each set is checked against what the gripper can hold and a
+set that fails is skipped with the reason.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+
+import numpy as np
+import trimesh
+
+from chess_sim.assets import PIECE_SETS_DIR
+
+SOURCE = os.path.expanduser("~/EmbodiedGen/outputs/piece_sets")
+PIECES = ("pawn", "rook", "knight", "bishop", "queen", "king")
+Y_UP_TO_Z_UP = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
+# a piece far wider than tall is a failed generation (a board, a plate, a figurine
+# lying down); Staunton pieces run 0.35-0.6 wide per unit height
+MAX_WIDTH_PER_HEIGHT = 0.8
+
+
+def import_piece(src: str, dst_dir: str) -> str | None:
+    """Convert one piece; returns a reason when it is unusable."""
+    mesh = trimesh.load(src, force="mesh")
+    lo, hi = mesh.bounds
+    if int(np.argmax(hi - lo)) != 1:
+        return f"tallest axis is {'xyz'[int(np.argmax(hi - lo))]}, not y"
+    mesh.apply_transform(Y_UP_TO_Z_UP)
+    lo, hi = mesh.bounds
+    mesh.apply_translation([-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]])
+    extent = mesh.bounds[1] - mesh.bounds[0]
+    if max(extent[0], extent[1]) > MAX_WIDTH_PER_HEIGHT * extent[2]:
+        return f"{max(extent[:2]) / extent[2]:.2f} wide per unit height"
+    os.makedirs(dst_dir, exist_ok=True)
+    name = os.path.splitext(os.path.basename(src))[0]
+    mesh.export(os.path.join(dst_dir, f"{name}.obj"))
+    # trimesh writes the texture as material_0.png next to the OBJ; keep the
+    # generator's own file in case the exporter re-encoded it
+    texture = os.path.join(os.path.dirname(src), "material_0.png")
+    if os.path.isfile(texture):
+        shutil.copyfile(texture, os.path.join(dst_dir, "material_0.png"))
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sets", nargs="*", default=None, help="default: every finished set")
+    ap.add_argument("--source", default=SOURCE)
+    args = ap.parse_args()
+    sets = args.sets or sorted(os.listdir(args.source))
+    imported = []
+    for name in sets:
+        mesh_dir = os.path.join(args.source, name, "asset3d")
+        sources = {p: os.path.join(mesh_dir, p, "result", "mesh", f"{p}.obj") for p in PIECES}
+        missing = [p for p, f in sources.items() if not os.path.isfile(f)]
+        if missing:
+            print(f"{name}: not finished (missing {', '.join(missing)})")
+            continue
+        target = os.path.join(PIECE_SETS_DIR, name)
+        shutil.rmtree(target, ignore_errors=True)
+        problems = {p: why for p, f in sources.items()
+                    if (why := import_piece(f, os.path.join(target, p)))}
+        if problems:
+            shutil.rmtree(target, ignore_errors=True)
+            print(f"{name}: skipped - " + "; ".join(f"{p}: {why}" for p, why in problems.items()))
+            continue
+        imported.append(name)
+        print(f"{name}: imported")
+    print(f"\n{len(imported)} sets in {PIECE_SETS_DIR}")
+
+
+if __name__ == "__main__":
+    main()

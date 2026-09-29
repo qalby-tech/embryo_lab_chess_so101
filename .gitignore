@@ -21,3 +21,5 @@ chess_sim/assets/scene/generated/
 outputs/
 *.egg-info/
 MUJOCO_LOG.TXT
+# imported generated piece sets (~25 MB each; rebuild with tools/import_piece_sets.py)
+chess_sim/assets/piece_sets/

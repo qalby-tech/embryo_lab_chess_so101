@@ -18,7 +18,7 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from .assets import piece_asset_name
+from .assets import piece_asset_name, piece_tint
 from .config import (JOINTS, START_FEN, AppearanceConfig, Camera, EnvConfig, FailureReason,
                      JointName, JointPose, Square, square_at, square_index)
 from .controller import PickPlaceController, grasp_plan
@@ -139,7 +139,8 @@ class ChessSimEnv:
         self.control_hz = config.control.hz
         self.substeps = max(1, int(round(1.0 / (self.control_hz * self.model.opt.timestep))))
 
-        self.slots = piece_slots(config.board, config.appearance.piece_scale)
+        self.slots = piece_slots(config.board, config.appearance.piece_scale,
+                                 config.appearance.piece_set)
         self._slot_body = {s.body: mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, s.body)
                            for s in self.slots}
         self._slot_qpos = {s.body: self.model.jnt_qposadr[self.model.body_jntadr[self._slot_body[s.body]]]
@@ -225,11 +226,12 @@ class ChessSimEnv:
 
     def recolor(self, appearance: AppearanceConfig) -> None:
         """Apply colors and lighting to the compiled scene without recompiling.
-        Piece size and the board texture stay as built."""
+        Piece size, the piece set and the board texture stay as built."""
         m = self.model
         for slot in self.slots:
             mat = m.material(f"mat_{piece_asset_name(slot.piece)}")
-            mat.rgba[:] = appearance.white_rgba if slot.piece.color == chess.WHITE else appearance.black_rgba
+            mat.rgba[:] = piece_tint(slot.piece, appearance.white_rgba, appearance.black_rgba,
+                                     self.config.appearance.piece_set)
         m.geom("table").rgba[:] = [*appearance.table_rgb, 1.0]
         key = m.light("key")
         direction = np.asarray(appearance.light_dir, dtype=float)

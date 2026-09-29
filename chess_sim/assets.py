@@ -35,19 +35,58 @@ SET_COUNTS = {chess.PAWN: 8, chess.ROOK: 2, chess.KNIGHT: 2,
               chess.BISHOP: 2, chess.QUEEN: 1, chess.KING: 1}
 
 
+# Piece sets. "default" is the vendored set, one textured mesh per colour and type.
+# Every other set lives in piece_sets/<name>/<type>/<type>.obj: one light-coloured
+# mesh per type, imported from EmbodiedGen by tools/import_piece_sets.py, and the
+# black side is the same mesh under a dark tint.
+DEFAULT_SET = "default"
+PIECE_SETS_DIR = os.path.join(ASSET_DIR, "piece_sets")
+DARK_SIDE = 0.22          # how far a single-colour set's black pieces are darkened
+
+
 def piece_asset_name(piece: chess.Piece) -> str:
-    """'white_knight', 'black_pawn', ... — the asset directory name."""
+    """'white_knight', 'black_pawn', ... — the body and material name in the scene."""
     color = "white" if piece.color == chess.WHITE else "black"
     return f"{color}_{_TYPE_NAME[piece.piece_type]}"
 
 
-def piece_obj_path(piece: chess.Piece) -> str:
-    name = piece_asset_name(piece)
-    return os.path.join(ASSET_DIR, "pieces", name, f"{name}.obj")
+def available_piece_sets() -> list[str]:
+    """Every set the scene can build: the vendored one first, then the imported ones."""
+    imported = sorted(d for d in os.listdir(PIECE_SETS_DIR)
+                      if os.path.isfile(os.path.join(PIECE_SETS_DIR, d, "king", "king.obj"))) \
+        if os.path.isdir(PIECE_SETS_DIR) else []
+    return [DEFAULT_SET, *imported]
 
 
-def piece_texture_path(piece: chess.Piece) -> str:
-    return os.path.join(ASSET_DIR, "pieces", piece_asset_name(piece), "material_0.png")
+def single_colour(piece_set: str) -> bool:
+    return piece_set != DEFAULT_SET
+
+
+def _piece_dir(piece: chess.Piece, piece_set: str) -> tuple[str, str]:
+    if piece_set == DEFAULT_SET:
+        name = piece_asset_name(piece)
+        return os.path.join(ASSET_DIR, "pieces", name), name
+    name = _TYPE_NAME[piece.piece_type]
+    return os.path.join(PIECE_SETS_DIR, piece_set, name), name
+
+
+def piece_obj_path(piece: chess.Piece, piece_set: str = DEFAULT_SET) -> str:
+    folder, name = _piece_dir(piece, piece_set)
+    return os.path.join(folder, f"{name}.obj")
+
+
+def piece_texture_path(piece: chess.Piece, piece_set: str = DEFAULT_SET) -> str:
+    return os.path.join(_piece_dir(piece, piece_set)[0], "material_0.png")
+
+
+def piece_tint(piece: chess.Piece, white_rgba, black_rgba, piece_set: str = DEFAULT_SET):
+    """The material colour over a piece's texture. The vendored set has dark
+    textures for black; a single-colour set darkens the tint instead."""
+    if piece.color == chess.WHITE:
+        return tuple(white_rgba)
+    if not single_colour(piece_set):
+        return tuple(black_rgba)
+    return (*(c * DARK_SIDE for c in black_rgba[:3]), black_rgba[3])
 
 
 # Collider profile: (bottom, top) height fractions of each cylinder segment and
@@ -128,10 +167,11 @@ def _radius_at(path: str, fraction: float) -> float:
     return float(np.linalg.norm(pts - axis, axis=1).max())
 
 
-def piece_geometry(piece: chess.Piece, square: float, piece_scale: float = 1.0) -> PieceGeometry:
+def piece_geometry(piece: chess.Piece, square: float, piece_scale: float = 1.0,
+                   piece_set: str = DEFAULT_SET) -> PieceGeometry:
     """Scale a piece to the board: target height, footprint capped to the square;
     `piece_scale` multiplies both (see `AppearanceConfig`)."""
-    path = piece_obj_path(piece)
+    path = piece_obj_path(piece, piece_set)
     lo, hi = _bounds(path)
     extent = hi - lo
     target_h = _PIECE_HEIGHT[piece.piece_type] * (square / _REFERENCE_SQUARE) * piece_scale
