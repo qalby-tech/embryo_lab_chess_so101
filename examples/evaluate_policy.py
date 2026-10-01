@@ -15,9 +15,39 @@ import argparse
 
 import numpy as np
 
-from chess_sim import (Camera, CaptureSampler, ChessSimEnv, ControlConfig, EnvConfig, LeRobotPolicy,
+from chess_sim.assets import available_piece_sets
+from chess_sim.config import BOARD_FINISHES
+from chess_sim.rollout import EvaluationReport
+from chess_sim import (AppearanceConfig, BoardConfig, Camera, CaptureSampler, ChessSimEnv, ControlConfig, EnvConfig, LeRobotPolicy,
                        LeRobotPolicyConfig, MoveSampler, RolloutConfig, evaluate)
 from chess_sim.policies import DEFAULT_ACTION_STEPS
+
+
+def sample_scenes(args) -> list:
+    """`--scenes` boards and looks, drawn as the wide collection draws them, from the
+    allowed piece sets and board materials."""
+    sets = [s for s in (args.piece_sets or available_piece_sets(verified_only=True))
+            if s not in args.exclude_piece_sets]
+    finishes = [f for f in (args.board_finishes or BOARD_FINISHES) if f not in args.exclude_board_finishes]
+    rng = np.random.default_rng(args.scene_seed)
+    scenes = []
+    while len(scenes) < args.scenes:
+        board, look = BoardConfig.sample(rng), AppearanceConfig.sample(rng, piece_sets=sets)
+        if look.board_finish in finishes:
+            scenes.append((board, look))
+    return scenes
+
+
+def describe(board, look) -> str:
+    if look.camera_height is None:
+        camera = "rig camera"
+    elif look.camera_offset is None:
+        camera = f"mast-line camera {look.camera_height * 100:.0f} cm up"
+    else:
+        out = float(np.hypot(*look.camera_offset))
+        camera = f"{'side' if out > 0.27 else 'boom'} camera {out * 100:.0f} cm out, {look.camera_height * 100:.0f} cm up"
+    return (f"{look.piece_set}, {look.board_finish} board {board.square * 1000:.0f} mm, turned "
+            f"{np.degrees(board.yaw):+.0f} deg, {camera}, {look.table_surface} table")
 
 
 def main():
@@ -46,6 +76,15 @@ def main():
                     default=[Camera.EXTERNAL, Camera.TOP],
                     help="views tiled left to right; 'top wrist' is exactly what the policy sees")
     ap.add_argument("--report", default=None, help="write the full report as JSON to this path")
+    ap.add_argument("--scenes", type=int, default=0,
+                    help="score on this many sampled scenes - board, piece set, camera, lighting, "
+                         "table - with the episodes split evenly between them; 0 is the published scene")
+    ap.add_argument("--scene-seed", type=int, default=7)
+    ap.add_argument("--piece-sets", nargs="*", default=None,
+                    help="draw scenes only from these sets; default is every set the expert passed")
+    ap.add_argument("--exclude-piece-sets", nargs="*", default=[])
+    ap.add_argument("--board-finishes", nargs="*", default=None, help="draw scenes only on these board materials")
+    ap.add_argument("--exclude-board-finishes", nargs="*", default=[])
     args = ap.parse_args()
 
     control = ControlConfig()
@@ -57,7 +96,9 @@ def main():
     # the env renders exactly what this checkpoint asks for, plus any other view the video wants
     extra = tuple(c for c in (args.video_cameras if args.video else []) if c not in policy.cameras)
     cameras = policy.cameras + extra
-    env = ChessSimEnv(EnvConfig(control=control.model_copy(update={"cameras": cameras})))
+    control = control.model_copy(update={"cameras": cameras})
+    scenes = sample_scenes(args) if args.scenes else [(BoardConfig(), AppearanceConfig())]
+    env = ChessSimEnv(EnvConfig(board=scenes[0][0], appearance=scenes[0][1], control=control))
     print(f"{policy.policy_type}: executing {policy.action_steps} of {policy.chunk_size} actions "
           f"per model call; targets held for {policy_config.hold} control steps"
           + (f"; {args.num_inference_steps} flow steps" if args.num_inference_steps else ""))
@@ -90,8 +131,20 @@ def main():
               flush=True)
         index += 1
 
-    report_card = evaluate(env, policy, schedule, RolloutConfig(max_steps=args.max_steps, seed=args.seed),
-                           on_step=record, on_episode=report)
+    results = []
+    for number, (board, appearance) in enumerate(scenes):
+        if number:                      # a scene is compiled into the model: a new one is a new env
+            env.close()
+            env = ChessSimEnv(EnvConfig(board=board, appearance=appearance, control=control))
+        share = [(sampler, count // len(scenes) + (number < count % len(scenes)))
+                 for sampler, count in schedule]
+        card = evaluate(env, policy, [(sampler, count) for sampler, count in share if count],
+                        RolloutConfig(max_steps=args.max_steps, seed=args.seed + number),
+                        on_step=record, on_episode=report)
+        results += card.results
+        if args.scenes:
+            print(f"scene {number}: {card.successes}/{card.episodes} | {describe(board, appearance)}", flush=True)
+    report_card = EvaluationReport(results=results)
     print(report_card.summary())
     if only:
         for uci in only:

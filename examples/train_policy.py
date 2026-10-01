@@ -42,6 +42,10 @@ def score_checkpoint(args, checkpoint: str, step: int, minutes: float) -> Checkp
                    "--moves", str(args.eval_episodes), "--captures", str(args.eval_captures),
                    "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
                    "--dataset-root", args.root, "--report", report_path]
+        if args.eval_scenes:
+            command += ["--scenes", str(args.eval_scenes),
+                        "--exclude-piece-sets", *args.eval_exclude_piece_sets,
+                        "--exclude-board-finishes", *args.eval_exclude_board_finishes]
         if args.moves:
             command += ["--only-moves", args.moves]
         if args.no_interpolate:
@@ -86,6 +90,11 @@ def main():
     ap.add_argument("--no-interpolate", action="store_true",
                     help="step to each of the policy's targets instead of ramping between them")
     ap.add_argument("--eval-seed", type=int, default=100)
+    ap.add_argument("--eval-scenes", type=int, default=0,
+                    help="score each block on this many sampled scenes instead of the published one")
+    ap.add_argument("--eval-exclude-piece-sets", nargs="*", default=[],
+                    help="piece sets held out of training: not used for the in-training check either")
+    ap.add_argument("--eval-exclude-board-finishes", nargs="*", default=[])
     ap.add_argument("--eval-max-steps", type=int, default=450)
     args = ap.parse_args()
 

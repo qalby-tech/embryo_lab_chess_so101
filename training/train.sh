@@ -28,4 +28,7 @@ exec $PY -u examples/train_policy.py \
   $([ -n "${INIT_FROM:-}" ] && echo --init-from "$INIT_FROM") \
   $([ -n "${LR_SCALE:-}" ] && echo --lr-scale "$LR_SCALE") \
   $([ -n "${POLICY_FLAGS:-}" ] && echo --policy-flags $POLICY_FLAGS) \
+  $([ -n "${EVAL_SCENES:-}" ] && echo --eval-scenes "$EVAL_SCENES") \
+  $([ -n "${HOLD_OUT_PIECE_SETS:-}" ] && echo --eval-exclude-piece-sets $HOLD_OUT_PIECE_SETS) \
+  $([ -n "${HOLD_OUT_BOARD_FINISHES:-}" ] && echo --eval-exclude-board-finishes $HOLD_OUT_BOARD_FINISHES) \
   "$@"
