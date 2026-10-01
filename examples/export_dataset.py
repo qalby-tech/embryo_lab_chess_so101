@@ -60,6 +60,10 @@ def main():
                     help="joint units: the public SO-101 degrees-with-offset, or raw radians")
     ap.add_argument("--max-episodes", type=int, default=None)
     ap.add_argument("--keep-failures", action="store_true", help="also export unsuccessful attempts")
+    ap.add_argument("--hold-out-piece-sets", nargs="*", default=[],
+                    help="leave episodes with these piece sets out, to evaluate on sets never trained with")
+    ap.add_argument("--hold-out-board-finishes", nargs="*", default=[],
+                    help="leave episodes on boards of these materials out, likewise")
     # LeRobot's default (libsvtav1, staged PNGs) encodes at about a minute per
     # episode here; h264 with streaming encoding is ~20x faster and the frames
     # are re-encoded from h264 recordings anyway.
@@ -105,7 +109,7 @@ def main():
         repo_id=args.repo_id, fps=fps, features=features, root=args.root, robot_type=ROBOT_TYPE,
         rgb_encoder=VideoEncoderConfig(vcodec=args.vcodec, crf=args.crf, g=2, pix_fmt="yuv420p"),
         streaming_encoding=True, encoder_threads=args.encoder_threads)
-    exported = skipped = damaged = 0
+    exported = skipped = damaged = held_out = 0
     for path in sources:
         if args.max_episodes is not None and exported >= args.max_episodes:
             break
@@ -115,6 +119,11 @@ def main():
             continue
         if not meta.get("success") and not args.keep_failures:
             skipped += 1
+            continue
+        look = meta.get("appearance") or {}
+        if (look.get("piece_set", "default") in args.hold_out_piece_sets
+                or look.get("board_finish", "wood") in args.hold_out_board_finishes):
+            held_out += 1                 # kept out of training, to be evaluated on
             continue
         data = np.load(os.path.join(path, "data.npz"))
         states, actions = data["observation_state"], data["action"]
@@ -152,6 +161,9 @@ def main():
         if exported % 25 == 0:
             print(f"  {exported} episodes exported", flush=True)
     dataset.finalize()
+    if held_out:
+        print(f"held out {held_out} episodes (piece sets {args.hold_out_piece_sets}, "
+              f"board finishes {args.hold_out_board_finishes})")
     print(f"exported {exported} episodes ({skipped} unsuccessful, {damaged} unreadable "
           f"recordings skipped) to {args.root}")
     for root in args.source:
