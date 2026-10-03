@@ -73,7 +73,7 @@ def main():
     ap.add_argument("--policy-flags", nargs="*", default=[],
                     help="extra lerobot-train flags, verbatim, e.g. --policy.train_expert_only=false")
     ap.add_argument("--lr-scale", type=float, default=1.0,
-                    help="scale every learning rate and the floor; below 1 for continuing a "
+                    help="scale the recipe's learning rates (for MolmoAct2 with LoRA: the action expert's); below 1 for continuing a "
                          "converged policy without knocking it off its optimum")
     ap.add_argument("--init-from", default=None,
                     help="a trained checkpoint (its pretrained_model directory) to continue from on "

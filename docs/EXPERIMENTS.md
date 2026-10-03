@@ -222,8 +222,8 @@ Twice, because the first attempt confounded two things.
 
 | continuation | 48-episode checks (moves, captures) | paired vs published, 300 positions, horizon 30 |
 | --- | --- | --- |
-| full peak rate (1e-5, as a fresh run) | 21/32 11/16 -> 19/32 12/16 -> 27/32 14/16 | **219/300** (73%): captures -3, moves -5, p = 0.48 |
-| all rates at a tenth | 24/32 10/16 -> 25/32 11/16 | **231/300** (77%): captures +0, moves +4, p = 0.75 |
+| every rate at its peak, as a fresh run | 21/32 11/16 -> 19/32 12/16 -> 27/32 14/16 | **219/300** (73%): captures -3, moves -5, p = 0.48 |
+| action expert at a tenth of its rate | 24/32 10/16 -> 25/32 11/16 | **231/300** (77%): captures +0, moves +4, p = 0.75 |
 | published 070000 | 25/32 10/16 | 227/300 (76%) |
 
 Three things the pair of runs settles:
@@ -261,7 +261,8 @@ Collected: 1,400 captures and 600 moves, four workers, five hours. The expert su
 1,197 of them and the other 803 were dropped by the exporter, as any failed demonstration
 is. Merged with the rebalanced set: `chess_mc_v3`, 9,280 episodes, 823,714 frames.
 Continued from the published checkpoint for 15,000 steps at the tenth-rate schedule that
-§4.7 found harmless (verified in the run's config: optimizer rate 1e-6, decay to 1e-7).
+§4.7 found harmless - the action expert at a tenth of its rate; what that schedule does to
+the other parameter groups is corrected in §6.
 
 | | 48-episode checks (moves, captures) | paired vs published, 300 positions, horizon 30 |
 | --- | --- | --- |
@@ -592,7 +593,33 @@ inference and returns nothing. `tools/sweep_inference.py` produced all of this -
 every arm on the same positions in one process, because loading the checkpoint costs more
 than the episodes do.
 
-## 6. Metrics — and a correction
+## 6. Metrics — and two corrections
+
+**"A tenth of the learning rate" meant the action expert only.** Sections 4.7 to 4.10 call
+their continuations "tenth-rate" and say every rate was scaled. Only one was. With the
+language model trained through LoRA - every run here - LeRobot's MolmoAct2 gives the LoRA,
+the vision encoder and the connector a fixed 5e-5 whatever `optimizer_lr`,
+`optimizer_vit_lr` and `optimizer_connector_lr` say; only `optimizer_action_expert_lr` is
+read (`get_optim_params`). The scheduler then decays every group by the same factor, to a
+tenth of its own peak. So the rates actually run were:
+
+| run | LoRA, vision, connector | action expert |
+| --- | --- | --- |
+| published, 70,000 steps | 5e-5 -> 5e-6 | 5e-5 -> 5e-6 |
+| continuation at "full rate" (§4.7) | 5e-5 -> 5e-6 | 5e-5 -> 5e-6 |
+| continuations at "a tenth" (§4.7, 4.8, 4.10) | 5e-5 -> 5e-6 | 5e-6 -> 5e-7 |
+| the wide run | 5e-5 -> 5e-6 | 2.5e-5 -> 2.5e-6 |
+
+The trainer logs the first group's rate, which is the LoRA's: `lr:5.0e-05` in every one of
+these logs, at every scale - the line that gave it away. An earlier check of "was the tenth
+applied" compared that logged value between two runs and could not have failed.
+
+What it changes: the published model's LoRA trained at five times the 1e-5 its settings
+file states. What it sharpens: both continuations of §4.7 restarted the LoRA at ten times
+the rate it had decayed to, and only the one that also restarted the action expert dropped
+pieces - the damage is the action expert's rate, not the backbone's. What it leaves alone:
+every paired comparison, since the runs compared differ exactly as described here.
+
 
 **Median placement error was misleading and results reported with it should be re-read.**
 

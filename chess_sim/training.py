@@ -58,8 +58,12 @@ class MolmoAct2Recipe(PolicyRecipe):
     base: str = "allenai/MolmoAct2-SO100_101"   # pretrained on this exact arm
     chunk_size: int = 30
     n_action_steps: int = 30
-    # MolmoAct2's own rates (lerobot configuration_molmoact2.py), one per
-    # parameter group. The scheduler decays each group to decay/language of its peak.
+    # MolmoAct2's own rates (lerobot configuration_molmoact2.py), one per parameter
+    # group. The scheduler decays each group to decay/language of its peak. With the
+    # language model trained through LoRA - train_mode_vlm below - the model ignores
+    # the first three and runs the LoRA, the vision encoder and the connector at a
+    # fixed 5e-5 (modeling_molmoact2.get_optim_params): the action expert's rate is
+    # the only one a run really sets, and the only one `lr_scale` moves.
     learning_rates: dict[str, float] = {
         "optimizer_lr": 1e-5,                     # language model (LoRA)
         "optimizer_vit_lr": 5e-6,                 # vision encoder
@@ -198,8 +202,10 @@ class TrainConfig(Config):
     # A checkpoint of our own to continue from, on new data; it carries its
     # architecture and flags, so the recipe only supplies the learning rates.
     init_from: str | None = None
-    # Scales every learning rate and the floor together. A warm start at the full
-    # peak re-heats a converged policy to ten times the rate it finished at.
+    # Scales the recipe's learning rates and the floor together. A warm start at the
+    # full peak re-heats a converged policy to ten times the rate it finished at. For
+    # MolmoAct2 with LoRA only the action expert's rate responds - see the recipe -
+    # and that is the rate whose restart makes a continued policy drop pieces.
     lr_scale: float = 1.0
     # Anything else for `lerobot-train`, verbatim - a recipe's default worth
     # varying for one run, such as --policy.train_expert_only=false
