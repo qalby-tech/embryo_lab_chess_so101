@@ -114,7 +114,9 @@ def main():
     done = max((int(tag) for tag in config.complete_checkpoints()), default=0)
 
     while done < args.total_steps:
-        target = min(done + args.block, args.total_steps)
+        # the next block boundary, not a block from wherever an interruption left the run:
+        # resuming from 8,000 with a 10,000 block must still be scored at 10,000
+        target = min((done // args.block + 1) * args.block, args.total_steps)
         print(f"\n=== training to step {target} ===", flush=True)
         started = time.time()
         subprocess.run(config.resume_command(target) if done else config.command(target), check=True)
