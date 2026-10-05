@@ -434,6 +434,61 @@ recipe kept. A run with the whole model trainable (`training/settings.smolvla_fu
 is the one untried variant; the decision was to spend the GPU on a wider training
 distribution for MolmoAct2 instead.
 
+### 4.12 The wide run, first attempt: nothing gained, half the rig lost
+
+The aim changed here: a policy that works on a board, a piece set and a camera placement
+it has not seen, so that a user can buy any chess set and stand a camera where it fits.
+The simulator learned to vary all of it (boards 25-31 mm in five materials, turned and
+off-centre; twenty generated piece sets and coin-style tokens; the workspace camera from
+the mast to a boom arm to a tripod beside the table; the arm on the table or raised;
+light, table and room), and 10,500 demonstrations were recorded across it, the expert
+succeeding on 95%. Exported with the marble set, the large tokens and cardboard boards
+held out: 7,521 episodes, merged with the corrections set of §4.10 to 18,604 episodes and
+1.73 million frames.
+
+The corrected checkpoint of §4.10 was continued on that for a planned 60,000 steps with
+the action expert at 2.5e-5 - "half the published rate". Each 10,000 steps it was scored
+on eight scenes drawn the way the collection draws them, 48 episodes:
+
+| | wide scenes (48) | median error | pieces knocked over |
+| --- | --- | --- | --- |
+| corrected checkpoint, before | 2 | 76 mm | 0 |
+| step 10,000 | 0 | 41 mm | 3 |
+| step 20,000 | 1 | 69 mm | 2 |
+
+Two, zero and one are the same number. The run was stopped at 20,000 and the checkpoint
+put through the paired test on the rig it came from:
+
+| 300 paired positions, published rig, horizon 30 | corrected (§4.10) | wide run, step 20,000 |
+| --- | --- | --- |
+| overall | 233 | **117** |
+| moves (200) | 155 | 73 |
+| captures (100) | 78 | 44 |
+| placement error / never lifted / missed the tray / dropped | 38 / 13 / 7 / 0 | 122 / 36 / 16 / 3 |
+
+Paired, it won 23 positions the corrected model lost and lost 139 the other way. After a
+day of training the policy had learned nothing measurable about the new scenes and
+forgotten half of the old one.
+
+Two causes, and this run cannot separate them:
+
+- **The rate was a fifty-fold restart.** "Half the published rate" compared against the
+  wrong number. The checkpoint it continued had finished with its action expert decayed
+  to 5e-7 (§6); 2.5e-5 on a fresh optimizer state is fifty times that. The restart that
+  made a policy drop pieces in §4.7 was ten times. The failures here are imprecision and
+  missed grasps rather than drops, but a policy re-heated this hard loses its precision
+  first.
+- **The data holds about three hundred scenes, not seven thousand.** Everything about a
+  scene's geometry - where the camera stands, how the board lies - was drawn once per
+  25-episode chunk, because the scene is compiled per process. So the 7,521 episodes
+  show some three hundred camera and board placements, and every evaluation scene is a
+  placement the policy has never seen. Colours and light vary per episode; the hard part,
+  geometry, does not.
+
+Next: the camera and the board's placement drawn per episode (neither needs a recompile),
+a new collection, and a continuation from the published 70,000-step checkpoint with the
+action expert at 5e-6 - once its floor, the restart three runs survived.
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
