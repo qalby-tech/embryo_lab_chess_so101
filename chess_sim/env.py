@@ -24,7 +24,7 @@ from .config import (JOINTS, START_FEN, AppearanceConfig, Camera, EnvConfig, Fai
 from .controller import PickPlaceController, grasp_plan
 from .ik import So101Ik
 from .reach import MAX_IK_ERROR, MAX_TILT, ReachMap
-from .scene import (ARM_PREFIX, FILL_LIGHT_DIFFUSE, key_diffuse, PieceSlot, arm_rest_pose, build_arm, build_scene,
+from .scene import (ARM_PREFIX, FILL_LIGHT_DIFFUSE, key_diffuse, lookat_xyaxes, mast_lens, overhead_camera, PieceSlot, arm_rest_pose, build_arm, build_scene,
                     export_xml, piece_slots)
 from .tasks import AnyTask, CaptureTask, MoveTask, Task, TaskFamily
 
@@ -32,6 +32,7 @@ from .tasks import AnyTask, CaptureTask, MoveTask, Task, TaskFamily
 SPAN_DIRECTIONS = (np.array([0.0, 1.0]), np.array([0.0, -1.0]),
                    np.array([1.0, 0.0]), np.array([-1.0, 0.0]))
 GRASP_HEIGHT = 0.016      # tool height above the board used to map out reachable squares
+CAMERA_FIELDS = ("camera_height", "camera_offset", "camera_fovy", "camera_over_board", "camera_aim", "camera_roll")
 
 OnStep = Callable[[np.ndarray], None]
 
@@ -136,6 +137,7 @@ class ChessSimEnv:
         self._board_mocap = self.model.body_mocapid[
             mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "board")]
         self.layout = Layout(board_origin=config.board.origin, arm_start=arm_rest_pose())
+        self._tray_margin = config.board.origin[0] - config.board.half_extent - config.board.tray_x
         self.control_hz = config.control.hz
         self.substeps = max(1, int(round(1.0 / (self.control_hz * self.model.opt.timestep))))
 
@@ -178,10 +180,19 @@ class ChessSimEnv:
         without it both are nominal. The draw is kept in `layout`.
         """
         nominal = self.config.board.origin
-        shift = self.config.randomization.board_shift
+        random_ = self.config.randomization
+        shift = random_.board_shift
         origin = nominal if rng is None else (nominal[0] + rng.uniform(-shift, shift),
                                               nominal[1] + rng.uniform(-shift, shift))
-        self._move_board(origin)
+        yaw = None
+        if rng is not None and (random_.board_yaw or random_.board_side):
+            # the board set down as a person sets it down: a little turned, off-centre
+            origin = (origin[0] + rng.uniform(-random_.board_side, random_.board_side), origin[1])
+            yaw = self.config.board.yaw + rng.uniform(-random_.board_yaw, random_.board_yaw)
+        self._move_board(origin, yaw)
+        if rng is not None and random_.camera:
+            draw = np.random.default_rng(rng.getrandbits(32))
+            self.place_camera(self.config.appearance.model_copy(update=AppearanceConfig.sample_camera(draw)))
         if rng is not None and self.config.action_noise.enabled:
             # only with noise on, so runs without it draw exactly what they always did
             self._noise_rng = np.random.default_rng(rng.getrandbits(32))
@@ -253,15 +264,42 @@ class ChessSimEnv:
                      "light_color", "fill_intensity", "ambient", "shadow_softness",
                      "backdrop_tint", "backdrop_brightness")})})
 
-    def _move_board(self, origin) -> None:
-        """Put the board's centre at `origin` (world x/y). Pieces are not moved;
-        reset() lays them out afterwards."""
+    def _move_board(self, origin, yaw: float | None = None) -> None:
+        """Put the board's centre at `origin` (world x/y), turned by `yaw` when given.
+        Pieces are not moved; reset() lays them out afterwards."""
         origin = (float(origin[0]), float(origin[1]))
         self.data.mocap_pos[self._board_mocap][:2] = origin
+        update: dict = {}
         if origin != self.board.origin:
-            self.board = self.board.model_copy(update={"origin": origin})
+            update["origin"] = origin
+        if yaw is not None and yaw != self.board.yaw:
+            self.data.mocap_quat[self._board_mocap] = [np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)]
+            update["yaw"] = float(yaw)
+        if update:
+            board = self.board.model_copy(update=update)
+            if yaw is not None:
+                # the tray keeps its distance from the board's left edge as the board moves
+                update["tray_x"] = board.origin[0] - board.half_extent - self._tray_margin
+                board = board.model_copy(update={"tray_x": update["tray_x"]})
+            self.board = board
             # which squares the scripted grasp can work on depends on where they are
             self.reach = self._compute_reach()
+
+    def place_camera(self, appearance: AppearanceConfig) -> None:
+        """Stand the workspace camera where `appearance` says, without recompiling:
+        a camera's position, orientation and field of view are model fields."""
+        m = self.model
+        camera = m.camera(str(Camera.TOP))
+        pos, target, fovy, up = overhead_camera(self.board, appearance, mast_lens(self.config.board))
+        xyaxes = lookat_xyaxes(pos, target, up)
+        frame = np.column_stack([xyaxes[:3], xyaxes[3:], np.cross(xyaxes[:3], xyaxes[3:])])
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, frame.reshape(-1))
+        camera.pos[:] = pos
+        camera.quat[:] = quat
+        camera.fovy[:] = fovy
+        self.config = self.config.model_copy(update={"appearance": self.config.appearance.model_copy(
+            update={k: getattr(appearance, k) for k in CAMERA_FIELDS})})
 
     def _compute_reach(self) -> ReachMap:
         return ReachMap.compute(self.board, self._tool_query, grasp_height=GRASP_HEIGHT)

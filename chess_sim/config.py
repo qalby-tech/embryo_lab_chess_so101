@@ -176,7 +176,7 @@ class BoardConfig(Config):
         return abs(c * dx + s * dy) <= half and abs(-s * dx + c * dy) <= half
 
     @classmethod
-    def sample(cls, rng: np.random.Generator) -> "BoardConfig":
+    def sample(cls, rng: np.random.Generator, per_episode_placement: bool = False) -> "BoardConfig":
         """A board as people own them: 25-31 mm squares, a thin to wide border, a
         vinyl roll-up to a thick wooden slab, set down a little nearer or further
         from the arm. The tray follows the board's edge. A quarter are the
@@ -186,8 +186,10 @@ class BoardConfig(Config):
             return cls()
         u = rng.uniform
         square, border = float(u(*BOARD_SQUARE_RANGE)), float(u(*BOARD_BORDER_RANGE))
-        yaw = float(np.radians(u(-BOARD_YAW_DEG, BOARD_YAW_DEG)))
-        side = float(u(-BOARD_SIDEWAYS, BOARD_SIDEWAYS))
+        # the turn and the sideways offset are drawn here once per scene, or left for
+        # `RandomizationConfig` to draw every episode (`ChessSimEnv.reset`)
+        yaw = 0.0 if per_episode_placement else float(np.radians(u(-BOARD_YAW_DEG, BOARD_YAW_DEG)))
+        side = 0.0 if per_episode_placement else float(u(-BOARD_SIDEWAYS, BOARD_SIDEWAYS))
         riser = 0.0 if rng.random() < ARM_ON_TABLE_CHANCE else float(u(*ARM_RISER_RANGE))
         thickness = float(u(*BOARD_THICKNESS_RANGE))
         # a board top more than ~12 mm above the arm's base puts the board edge in the
@@ -228,6 +230,7 @@ BOARD_THICKNESS_RANGE = (0.003, 0.020)       # a vinyl roll-up to a thick wooden
 BOARD_ARM_GAP_RANGE = (0.050, 0.110)
 BOARD_YAW_DEG = 12.0                         # set down a little turned
 BOARD_SIDEWAYS = 0.04                        # the arm clamped off the board's centre line
+PER_EPISODE_PLACEMENT = dict(board_yaw=float(np.radians(BOARD_YAW_DEG)), board_side=BOARD_SIDEWAYS, camera=True)
 ARM_ON_TABLE_CHANCE = 0.4                    # clamped straight to the table, no riser
 ARM_RISER_RANGE = (0.02, 0.06)
 MAX_BOARD_ABOVE_ARM = 0.012                  # measured: 17 mm misses by a square, 12 mm is clean
@@ -319,21 +322,14 @@ class AppearanceConfig(Config):
     backdrop_tint: tuple[float, float, float] = (1.0, 1.0, 1.0)  # the room behind the table
     backdrop_brightness: float = 0.55
 
-    @classmethod
-    def sample(cls, rng: np.random.Generator,
-               piece_scale_range: tuple[float, float] = PIECE_SCALE_SAMPLED,
-               piece_sets: Sequence[str] = ("default",)) -> "AppearanceConfig":
-        """A random look drawn from the ranges above, the piece set among `piece_sets`."""
+    @staticmethod
+    def sample_camera(rng: np.random.Generator) -> dict:
+        """Where the workspace camera stands: the published mast a third of the time,
+        otherwise a boom arm over the board or a tripod beside it. Every field is
+        returned, so applying the draw to a scene on the mast moves it off, and back."""
         u = rng.uniform
-        piece_set = str(piece_sets[int(rng.integers(len(piece_sets)))])
-        light = tuple(int(v) for v in u(*LIGHT_SQUARE_RANGE))
-        dark = tuple(int(v) for v in u(*DARK_SQUARE_RANGE))
-        if rng.random() < PAINTED_BOARD_CHANCE:
-            hue = rng.integers(3)
-            dark = tuple(int(u(*PAINTED_BASE_RANGE) + (PAINTED_HUE_BOOST if hue == c else 0))
-                         for c in range(3))
-        azimuth, elevation = u(0, 2 * np.pi), np.radians(u(*LIGHT_ELEVATION_RANGE))
-        camera = {}
+        camera = dict(camera_height=None, camera_offset=None, camera_fovy=24.0,
+                      camera_over_board=0.0, camera_aim=(0.0, 0.0), camera_roll=0.0)
         if rng.random() >= PUBLISHED_RIG_CHANCE:
             height = float(u(*CAMERA_HEIGHT_RANGE))
             offset = None
@@ -359,6 +355,23 @@ class AppearanceConfig(Config):
                           camera_over_board=float(u(0.0, 1.0)),
                           camera_aim=tuple(float(v) for v in u(-CAMERA_AIM, CAMERA_AIM, 2)),
                           camera_roll=float(u(-CAMERA_ROLL, CAMERA_ROLL)))
+        return camera
+
+    @classmethod
+    def sample(cls, rng: np.random.Generator,
+               piece_scale_range: tuple[float, float] = PIECE_SCALE_SAMPLED,
+               piece_sets: Sequence[str] = ("default",)) -> "AppearanceConfig":
+        """A random look drawn from the ranges above, the piece set among `piece_sets`."""
+        u = rng.uniform
+        piece_set = str(piece_sets[int(rng.integers(len(piece_sets)))])
+        light = tuple(int(v) for v in u(*LIGHT_SQUARE_RANGE))
+        dark = tuple(int(v) for v in u(*DARK_SQUARE_RANGE))
+        if rng.random() < PAINTED_BOARD_CHANCE:
+            hue = rng.integers(3)
+            dark = tuple(int(u(*PAINTED_BASE_RANGE) + (PAINTED_HUE_BOOST if hue == c else 0))
+                         for c in range(3))
+        azimuth, elevation = u(0, 2 * np.pi), np.radians(u(*LIGHT_ELEVATION_RANGE))
+        camera = cls.sample_camera(rng)
         warmth = float(u(0.0, 1.0))
         light_color = tuple(float(w + (c - w) * warmth) for w, c in zip(WARM_LIGHT, COOL_LIGHT))
         return cls(piece_scale=float(u(*piece_scale_range)), piece_set=piece_set,
@@ -408,6 +421,12 @@ class RandomizationConfig(Config):
 
     board_shift: float = 0.010        # m on each axis - about a third of a square
     arm_joint_jitter: float = 0.10    # rad on each joint
+    # Per-episode placement, off by default so the published results reproduce. The
+    # first wide collection drew these once per 25-episode chunk - some three hundred
+    # placements in seven thousand episodes - and the policy learned none of them.
+    board_yaw: float = 0.0            # rad either way: the board set down turned
+    board_side: float = 0.0           # m either way: the board off the arm's centre line
+    camera: bool = False              # the workspace camera redrawn every episode (AppearanceConfig.sample_camera)
 
 
 class ActionNoiseConfig(Config):

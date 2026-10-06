@@ -57,6 +57,20 @@ def score_checkpoint(args, checkpoint: str, step: int, minutes: float) -> Checkp
             return None
         with open(report_path) as f:
             report = EvaluationReport.model_validate_json(f.read())
+        if args.eval_scenes and args.eval_home_episodes:
+            # the rig the policy came from, scored beside the sampled scenes: a run that
+            # learns nothing new while forgetting the old one shows it here first
+            home_path = os.path.join(tmp, "home.json")
+            home = subprocess.run([PYTHON, EVALUATOR, "--checkpoint", checkpoint,
+                                   "--moves", str(args.eval_home_episodes), "--captures", str(args.eval_home_episodes // 2),
+                                   "--seed", str(args.eval_seed), "--max-steps", str(args.eval_max_steps),
+                                   "--dataset-root", args.root, "--report", home_path], capture_output=True, text=True)
+            if os.path.exists(home_path):
+                with open(home_path) as f:
+                    home_report = EvaluationReport.model_validate_json(f.read())
+                print(f"home rig at step {step}: {home_report.successes}/{home_report.episodes} successes", flush=True)
+            else:
+                print("home-rig evaluation produced no report:", home.stderr[-400:])
     return CheckpointScore.from_report(report, step=step, minutes=minutes)
 
 
@@ -95,6 +109,8 @@ def main():
     ap.add_argument("--eval-exclude-piece-sets", nargs="*", default=[],
                     help="piece sets held out of training: not used for the in-training check either")
     ap.add_argument("--eval-exclude-board-finishes", nargs="*", default=[])
+    ap.add_argument("--eval-home-episodes", type=int, default=0,
+                    help="with --eval-scenes: also score this many moves (and half as many captures) on the published rig")
     ap.add_argument("--eval-max-steps", type=int, default=450)
     args = ap.parse_args()
 

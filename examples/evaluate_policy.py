@@ -16,9 +16,9 @@ import argparse
 import numpy as np
 
 from chess_sim.assets import available_piece_sets
-from chess_sim.config import BOARD_FINISHES
+from chess_sim.config import BOARD_FINISHES, PER_EPISODE_PLACEMENT
 from chess_sim.rollout import EvaluationReport
-from chess_sim import (AppearanceConfig, BoardConfig, Camera, CaptureSampler, ChessSimEnv, ControlConfig, EnvConfig, LeRobotPolicy,
+from chess_sim import (AppearanceConfig, BoardConfig, Camera, CaptureSampler, RandomizationConfig, ChessSimEnv, ControlConfig, EnvConfig, LeRobotPolicy,
                        LeRobotPolicyConfig, MoveSampler, RolloutConfig, evaluate)
 from chess_sim.policies import DEFAULT_ACTION_STEPS
 
@@ -32,7 +32,7 @@ def sample_scenes(args) -> list:
     rng = np.random.default_rng(args.scene_seed)
     scenes = []
     while len(scenes) < args.scenes:
-        board, look = BoardConfig.sample(rng), AppearanceConfig.sample(rng, piece_sets=sets)
+        board, look = BoardConfig.sample(rng, per_episode_placement=True), AppearanceConfig.sample(rng, piece_sets=sets)
         if look.board_finish in finishes:
             scenes.append((board, look))
     return scenes
@@ -98,7 +98,10 @@ def main():
     cameras = policy.cameras + extra
     control = control.model_copy(update={"cameras": cameras})
     scenes = sample_scenes(args) if args.scenes else [(BoardConfig(), AppearanceConfig())]
-    env = ChessSimEnv(EnvConfig(board=scenes[0][0], appearance=scenes[0][1], control=control))
+    # sampled scenes also move the board and the camera every episode, as the wide collection does
+    randomization = RandomizationConfig(**PER_EPISODE_PLACEMENT) if args.scenes else RandomizationConfig()
+    env = ChessSimEnv(EnvConfig(board=scenes[0][0], appearance=scenes[0][1], control=control,
+                                randomization=randomization))
     print(f"{policy.policy_type}: executing {policy.action_steps} of {policy.chunk_size} actions "
           f"per model call; targets held for {policy_config.hold} control steps"
           + (f"; {args.num_inference_steps} flow steps" if args.num_inference_steps else ""))
@@ -135,7 +138,8 @@ def main():
     for number, (board, appearance) in enumerate(scenes):
         if number:                      # a scene is compiled into the model: a new one is a new env
             env.close()
-            env = ChessSimEnv(EnvConfig(board=board, appearance=appearance, control=control))
+            env = ChessSimEnv(EnvConfig(board=board, appearance=appearance, control=control,
+                                        randomization=randomization))
         share = [(sampler, count // len(scenes) + (number < count % len(scenes)))
                  for sampler, count in schedule]
         card = evaluate(env, policy, [(sampler, count) for sampler, count in share if count],

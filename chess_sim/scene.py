@@ -83,7 +83,7 @@ def piece_slots(board: BoardConfig, piece_scale: float = 1.0,
     return slots
 
 
-def _lookat_xyaxes(pos, target, up=(0.0, 0.0, 1.0)):
+def lookat_xyaxes(pos, target, up=(0.0, 0.0, 1.0)):
     """Camera x/y axes (MuJoCo convention: -z is the view direction); `up` is
     the world direction that should point up in the image."""
     forward = np.asarray(target, float) - np.asarray(pos, float)
@@ -96,7 +96,7 @@ def _lookat_xyaxes(pos, target, up=(0.0, 0.0, 1.0)):
 
 def _add_camera(spec, name: Camera, pos, target, fovy=42, up=(0.0, 0.0, 1.0)):
     spec.worldbody.add_camera(name=str(name), pos=list(pos),
-                              xyaxes=list(_lookat_xyaxes(pos, target, up)), fovy=fovy)
+                              xyaxes=list(lookat_xyaxes(pos, target, up)), fovy=fovy)
 
 
 def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig = AppearanceConfig()) -> mujoco.MjSpec:
@@ -130,14 +130,14 @@ def build_scene(board: BoardConfig = BoardConfig(), appearance: AppearanceConfig
     # the overhead image is upright along the files (white at the bottom) and
     # framed on the board: at this distance the board fills ~86% of the frame
     # height, which is what a policy needs to tell one square from another
-    pos, target, fovy, up = _overhead_camera(board, appearance, camera_pos)
+    pos, target, fovy, up = overhead_camera(board, appearance, camera_pos)
     _add_camera(spec, Camera.TOP, pos, target, fovy=fovy, up=up)
     # last, because merging the arm's MJCF brings that model's visual settings with it
     spec.visual.global_.offwidth, spec.visual.global_.offheight = OFFSCREEN_SIZE
     return spec
 
 
-def _overhead_camera(board, appearance, mast_lens):
+def overhead_camera(board, appearance, mast_lens):
     """Where the overhead camera is, what it looks at, its field of view and its up
     direction - the published rig unless the appearance moves it."""
     cx, cy = board.origin
@@ -178,7 +178,7 @@ def _add_camera_mast(spec, board) -> tuple[float, float, float]:
     carries a square tube beside the arm with the workspace camera on top,
     pointed down at the board. Returns the camera position."""
     ax, ay, az = board.arm_base
-    plate = 0.010
+    plate = MAST_PLATE
     spec.worldbody.add_geom(name="mast_plate", type=mujoco.mjtGeom.mjGEOM_BOX,
                             size=[0.5 * MAST_SIDE + 0.06, 0.07, plate / 2],
                             pos=[ax + 0.5 * MAST_SIDE, ay, az + plate / 2],
@@ -192,11 +192,21 @@ def _add_camera_mast(spec, board) -> tuple[float, float, float]:
                             pos=[mx, ay, az + plate + lower + (MAST_HEIGHT - lower) / 2],
                             rgba=[0.08, 0.08, 0.08, 1])
     cam_z = az + plate + MAST_HEIGHT + 0.02
-    housing = (0.015, 0.03, 0.02)
     spec.worldbody.add_geom(name="mast_camera", type=mujoco.mjtGeom.mjGEOM_BOX,
-                            size=list(housing), pos=[mx, ay + 0.02, cam_z],
+                            size=list(MAST_HOUSING), pos=[mx, ay + 0.02, cam_z],
                             rgba=[0.08, 0.08, 0.08, 1], contype=0, conaffinity=0)
-    return (mx, ay + 0.02 + housing[1] + 0.005, cam_z)   # lens just ahead of the housing
+    return mast_lens(board)
+
+
+MAST_PLATE = 0.010
+MAST_HOUSING = (0.015, 0.03, 0.02)
+
+
+def mast_lens(board) -> tuple[float, float, float]:
+    """Where the lens of the published rig's camera sits: just ahead of the housing
+    on top of the mast beside the arm."""
+    ax, ay, az = board.arm_base
+    return (ax + MAST_SIDE, ay + 0.02 + MAST_HOUSING[1] + 0.005, az + MAST_PLATE + MAST_HEIGHT + 0.02)
 
 
 def _add_environment(spec, board, appearance):
@@ -341,7 +351,7 @@ def _add_wrist_camera(spec):
     rot = rot.reshape(3, 3)                      # site axes in the gripper body frame
     cam = WRIST_CAMERA
     pos = np.asarray(site.pos, dtype=float) + rot @ np.asarray(cam.pos, dtype=float)
-    axes = _lookat_xyaxes(cam.pos, cam.target, cam.up)
+    axes = lookat_xyaxes(cam.pos, cam.target, cam.up)
     xyaxes = np.concatenate([rot @ axes[:3], rot @ axes[3:]])
     gripper = spec.body(ARM_PREFIX + "gripper")
     gripper.add_camera(name=str(Camera.WRIST), pos=list(pos), xyaxes=list(xyaxes), fovy=cam.fovy)

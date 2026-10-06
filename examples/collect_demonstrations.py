@@ -23,7 +23,8 @@ import time
 import numpy as np
 
 from chess_sim.assets import available_piece_sets
-from chess_sim import (ActionNoiseConfig, AppearanceConfig, BoardConfig, CaptureSampler, ChessSimEnv, ControlConfig,
+from chess_sim.config import PER_EPISODE_PLACEMENT
+from chess_sim import (ActionNoiseConfig, AppearanceConfig, BoardConfig, RandomizationConfig, CaptureSampler, ChessSimEnv, ControlConfig,
                        EnvConfig, EpisodeRecorder, MoveSampler, RecorderConfig, TaskFamily, demonstrate)
 
 SHARD_PREFIX = "shard_"
@@ -38,7 +39,10 @@ def collect(out: str, episodes: int, seed: int, randomize: bool, image_size: tup
     # One scene per process: piece size and the board texture are baked into the
     # compiled model, and every rebuild leaks about a gigabyte of driver memory.
     # Size, piece set and board vary across chunks instead, colors and lighting per episode.
-    config = EnvConfig(board=BoardConfig.sample(looks) if vary_board else BoardConfig(),
+    # the board's size and material and the piece set are compiled in, so they vary per
+    # chunk; where the board lies and where the camera stands change every episode
+    config = EnvConfig(board=BoardConfig.sample(looks, per_episode_placement=True) if vary_board else BoardConfig(),
+                       randomization=RandomizationConfig(**PER_EPISODE_PLACEMENT) if vary_board else RandomizationConfig(),
                        appearance=AppearanceConfig.sample(looks, piece_sets=piece_sets) if randomize
                        else AppearanceConfig(piece_set=piece_sets[0]),
                        control=ControlConfig(image_size=image_size), action_noise=noise)
@@ -81,7 +85,8 @@ def main():
                     help="control steps each perturbation lasts")
     ap.add_argument("--out", default="datasets/chess")
     ap.add_argument("--vary-board", action="store_true",
-                    help="a different board per chunk: square size, border, thickness, distance to the arm")
+                    help="a different board per chunk - square size, border, thickness, material, distance to the arm - "
+                         "and per episode the board's turn and offset and where the workspace camera stands")
     ap.add_argument("--piece-sets", nargs="*", default=["default"],
                     help="piece sets to draw from, one per chunk; 'all' for every set the expert passed "
                          "(see chess_sim.assets.available_piece_sets)")
