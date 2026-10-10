@@ -489,6 +489,33 @@ Next: the camera and the board's placement drawn per episode (neither needs a re
 a new collection, and a continuation from the published 70,000-step checkpoint with the
 action expert at 5e-6 - once its floor, the restart three runs survived.
 
+### 4.13 The wide run, second attempt: the same collapse at the floor rate
+
+Both causes of §4.12 were removed. The camera and the board's placement are now drawn
+per episode (`PER_EPISODE_PLACEMENT`: yaw ±12°, side ±4 cm, a camera draw each reset),
+and a new collection of 7,732 episodes replaced the first; merged with the corrections
+set and the first wide export: 26,336 episodes, 2.54 million frames. The continuation
+started from the published 70,000-step checkpoint with the action expert at 5e-6 - the
+floor that checkpoint had finished at, the restart three continuations had survived.
+
+| | wide scenes (48) | median error | published rig (24) |
+| --- | --- | --- | --- |
+| published checkpoint, before | 2 | 76 mm | ~18 expected |
+| step 10,000 | 3 (moves 2/32, captures 1/16) | 41 mm | **6** |
+| step 16,500 (by hand, 16 episodes before it was stopped) | 1 | - | - |
+
+Same picture as §4.12 at a fiftieth of the rate: nothing learned on the wide scenes,
+two thirds of the home rig lost within 10,000 steps. So the rate was never the lever.
+In LoRA mode the language model's adapters, the vision encoder and the connector train
+at a fixed 5e-5 whatever the action expert is given (§6), and it is those - the parts
+that see the image - that the wide data pulls away from the one scene they were fitted
+to. A policy fitted to one scene unlearns it faster than it learns the others.
+
+Stopped at 16,500 and abandoned. Next: the same data from the pretrained base,
+`allenai/MolmoAct2-SO100_101`, with the published run's rates and the decay sized to
+120,000 steps, so every scene is seen from the first step and nothing has to be
+unlearned (`training/settings.wide_base.env`).
+
 ## 5. Findings
 
 ### 5.1 The action label was a copy of the next observed state
@@ -874,6 +901,18 @@ LoRA on the VLM plus a trainable action expert: 737 M trainable of 5.6 B, 29.7 G
   only verified successes are exported.
 
 ---
+
+- **A full Windows drive kills WSL mid-write, and looks like anything else.** Four
+  virtual-machine deaths in one day, three of them during a checkpoint save; the log ends
+  in unwritten bytes, the checkpoint in a temp file, and the crash folder in SIGBUS dumps
+  of whatever was touching the disk. Inside WSL the filesystem showed 246 GB free; the
+  disk image behind it is a dynamic file that must grow for every block never written
+  since its last compaction, and the host drive had 148 MB. Memory was the first guess
+  and was wrong - the 40 GB cap had not changed in months. Freed blocks are reused (a
+  test write succeeded with the host at 148 MB), so the pruner's deletions keep a run
+  alive; what freed the host was deleting 260 GB of superseded merges and checkpoints and
+  compacting the image from 714 GB to 510 GB. Check the host drive, not the guest, before
+  a run that writes 18 GB every 500 steps.
 
 ## 8. Open questions
 
